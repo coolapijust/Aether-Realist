@@ -93,7 +93,11 @@ jobs:
           export CC=x86_64-w64-mingw32-gcc
           export CGO_LDFLAGS="-L/usr/x86_64-w64-mingw32/lib -lglfw3 -lopengl32 -lgdi32"
           echo "Starting build..."
+          # 后台输出心跳，防止 GitHub Actions 认为卡住
+          (while true; do echo "[$(date +%H:%M:%S)] Compiling..."; sleep 30; done) &
+          HEARTBEAT=$!
           go build -v -p 1 -ldflags="-H=windowsgui" -o aether-studio.exe ./cmd/aether-studio
+          kill $HEARTBEAT 2>/dev/null || true
           echo "Build complete!"
 
       - name: Upload artifact
