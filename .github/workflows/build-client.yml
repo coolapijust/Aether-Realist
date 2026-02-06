@@ -21,10 +21,10 @@ jobs:
           go clean -modcache
       - name: Download dependencies
         run: |
-          go mod download
+          GOFLAGS=-mod=mod go mod download
       - name: Build Windows EXE
         run: |
-          GOOS=windows GOARCH=amd64 go build -o aether-client.exe ./cmd/aether-client
+          GOFLAGS=-mod=mod GOOS=windows GOARCH=amd64 go build -o aether-client.exe ./cmd/aether-client
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
