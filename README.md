@@ -25,6 +25,12 @@ Aether-Realist 是一套运行于 WebTransport (HTTP/3) 之上的无状态、分
 - 读取 https://ip.v2too.top/ 并展示优选 IP。
 - 提示 `--dial-addr` 的最佳接入方式。
 
+桌面端可以使用 `cmd/aether-studio`，该程序将 Client Studio 的能力移植进本地 GUI，并补充系统代理开关与托盘管理入口。
+
+```bash
+go build -o aether-studio ./cmd/aether-studio
+```
+
 ## 部署方法
 
 ### 1. Worker 部署
