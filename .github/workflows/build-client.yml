@@ -74,6 +74,7 @@ jobs:
           $env:GOCACHE = "$env:RUNNER_TEMP\go-build"
           $env:GOMODCACHE = "$env:RUNNER_TEMP\go-mod"
           $env:GOPROXY = "https://proxy.golang.org,direct"
+          go mod tidy
           go mod download
 
       - name: Build Windows EXE
