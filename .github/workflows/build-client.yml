@@ -39,7 +39,7 @@ jobs:
 
   build-studio-windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         shell: msys2 {0}
@@ -76,19 +76,27 @@ jobs:
           go clean -modcache
           rm -f go.sum
 
-      - name: Download dependencies
+      - name: Download Go modules
+        env:
+          GOCACHE: /tmp/go-build
+          GOMODCACHE: /tmp/go-mod
+          GOTMPDIR: /tmp/go-tmp
+          GOFLAGS: "-mod=mod -buildvcs=false"
+          GOPROXY: "https://proxy.golang.org,https://goproxy.cn,direct"
+        run: |
+          go mod download -x
+
+      - name: Tidy go modules
         env:
           GOCACHE: /tmp/go-build
           GOMODCACHE: /tmp/go-mod
           GOTMPDIR: /tmp/go-tmp
           CGO_ENABLED: 1
           CC: gcc
-          CGO_CFLAGS: "-I/mingw64/include"
-          CGO_LDFLAGS: "-L/mingw64/lib"
           GOFLAGS: "-mod=mod -buildvcs=false"
+          GOPROXY: "https://proxy.golang.org,https://goproxy.cn,direct"
         run: |
-          go mod tidy
-          go mod download
+          go mod tidy -v
 
       - name: Build Windows EXE
         env:
