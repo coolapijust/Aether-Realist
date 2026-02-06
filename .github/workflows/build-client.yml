@@ -45,6 +45,14 @@ jobs:
         with:
           go-version: "1.21"
           cache: false
+      - name: Install MinGW toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
       - name: Clear module cache
         run: |
           go clean -modcache
@@ -61,7 +69,9 @@ jobs:
           $env:GOFLAGS = "-mod=mod -buildvcs=false"
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
-          go build -v -o aether-studio.exe ./cmd/aether-studio
+          $env:CGO_ENABLED = "1"
+          $env:CC = "gcc"
+          go build -x -v -o aether-studio.exe ./cmd/aether-studio
         shell: pwsh
       - name: Upload artifact
         uses: actions/upload-artifact@v4
