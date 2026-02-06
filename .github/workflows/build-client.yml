@@ -11,97 +11,55 @@ on:
       - ".github/workflows/build-client.yml"
   workflow_dispatch:
 
+env:
+  GO_VERSION: "1.21"
+
 jobs:
-  build-windows:
+  build-aether-client:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
-          cache: false
-      - name: Clear module cache
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build
         run: |
-          go clean -modcache
-          rm -f go.sum
-      - name: Download dependencies
-        run: |
-          GOFLAGS=-mod=mod go mod tidy
-          GOFLAGS=-mod=mod go mod download
-      - name: Build Windows EXE
-        run: |
-          GOFLAGS=-mod=mod GOOS=windows GOARCH=amd64 go build -o aether-client.exe ./cmd/aether-client
+          go mod tidy
+          GOOS=windows GOARCH=amd64 go build -o aether-client.exe ./cmd/aether-client
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: aether-client-windows
           path: aether-client.exe
 
-  build-studio-windows:
-    runs-on: windows-latest
-    timeout-minutes: 60
+  # 使用预构建的交叉编译镜像
+  build-aether-studio:
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/fyneio/fyne-cross-images:windows-latest
+      options: --user root
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache MSYS2
-        uses: actions/cache@v4
-        id: cache-msys2
-        with:
-          path: C:\msys64
-          key: msys2-mingw64-${{ hashFiles('.github/workflows/build-client.yml') }}
-
-      - name: Setup MSYS2
-        if: steps.cache-msys2.outputs.cache-hit != 'true'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          path-type: inherit
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-glfw
-            mingw-w64-x86_64-glew
-            mingw-w64-x86_64-mesa
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-          cache: false
-
+      # 缓存 Go modules
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
-          path: |
-            ~\go\pkg\mod
-            %LocalAppData%\go-build
+          path: /go/pkg/mod
           key: go-mod-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: |
             go-mod-${{ runner.os }}-
 
-      - name: Clear and prepare
-        shell: pwsh
+      - name: Build Windows executable
         run: |
-          go clean -modcache
-          Remove-Item -Force -ErrorAction SilentlyContinue go.sum
-
-      - name: Download Go modules
-        shell: pwsh
-        run: |
-          $env:GOPROXY = "https://proxy.golang.org,direct"
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+          export CC=x86_64-w64-mingw32-gcc
+          
           go mod tidy
-          go mod download
-
-      - name: Build Windows EXE
-        shell: pwsh
-        run: |
-          $env:CGO_ENABLED = "1"
-          $env:CC = "gcc"
-          $env:GOOS = "windows"
-          $env:GOARCH = "amd64"
-          $env:PKG_CONFIG_PATH = "C:\msys64\mingw64\lib\pkgconfig"
-          go build -p 1 -v -ldflags="-H=windowsgui" -o aether-studio.exe ./cmd/aether-studio
+          go build -p 1 -ldflags="-H=windowsgui" -o aether-studio.exe ./cmd/aether-studio
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
