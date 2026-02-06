@@ -39,6 +39,10 @@ jobs:
   build-studio-windows:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      GOCACHE: ${{ runner.temp }}\go-build
+      GOMODCACHE: ${{ runner.temp }}\go-mod
+      GOTMPDIR: ${{ runner.temp }}\go-tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -71,7 +75,7 @@ jobs:
           $env:GOARCH = "amd64"
           $env:CGO_ENABLED = "1"
           $env:CC = "gcc"
-          go build -x -v -o aether-studio.exe ./cmd/aether-studio
+          go build -v -o aether-studio.exe ./cmd/aether-studio
         shell: pwsh
       - name: Upload artifact
         uses: actions/upload-artifact@v4
