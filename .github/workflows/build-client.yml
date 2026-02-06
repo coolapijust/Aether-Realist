@@ -39,10 +39,6 @@ jobs:
   build-studio-windows:
     runs-on: windows-latest
     timeout-minutes: 20
-    env:
-      GOCACHE: ${{ runner.temp }}\go-build
-      GOMODCACHE: ${{ runner.temp }}\go-mod
-      GOTMPDIR: ${{ runner.temp }}\go-tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -59,17 +55,26 @@ jobs:
             mingw-w64-x86_64-pkg-config
       - name: Clear module cache
         run: |
+          $env:GOCACHE = "$env:RUNNER_TEMP\\go-build"
+          $env:GOMODCACHE = "$env:RUNNER_TEMP\\go-mod"
+          $env:GOTMPDIR = "$env:RUNNER_TEMP\\go-tmp"
           go clean -modcache
           if (Test-Path go.sum) { Remove-Item go.sum }
         shell: pwsh
       - name: Download dependencies
         run: |
+          $env:GOCACHE = "$env:RUNNER_TEMP\\go-build"
+          $env:GOMODCACHE = "$env:RUNNER_TEMP\\go-mod"
+          $env:GOTMPDIR = "$env:RUNNER_TEMP\\go-tmp"
           $env:GOFLAGS = "-mod=mod -buildvcs=false"
           go mod tidy
           go mod download
         shell: pwsh
       - name: Build Windows EXE
         run: |
+          $env:GOCACHE = "$env:RUNNER_TEMP\\go-build"
+          $env:GOMODCACHE = "$env:RUNNER_TEMP\\go-mod"
+          $env:GOTMPDIR = "$env:RUNNER_TEMP\\go-tmp"
           $env:GOFLAGS = "-mod=mod -buildvcs=false"
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"

@@ -36,7 +36,7 @@ func main() {
 	win.SetContent(content)
 
 	if deskApp, ok := studioApp.(desktop.App); ok {
-		setupTray(deskApp, win)
+		setupTray(studioApp, deskApp, win)
 		win.SetCloseIntercept(func() {
 			win.Hide()
 		})
@@ -208,17 +208,17 @@ func buildUI(win fyne.Window, state *studioState) fyne.CanvasObject {
 	)
 }
 
-func setupTray(studioApp desktop.App, win fyne.Window) {
+func setupTray(app fyne.App, deskApp desktop.App, win fyne.Window) {
 	showItem := fyne.NewMenuItem("显示窗口", func() {
 		win.Show()
 		win.RequestFocus()
 	})
 	quitItem := fyne.NewMenuItem("退出", func() {
 		win.Close()
-		studioApp.Quit()
+		app.Quit()
 	})
 	menu := fyne.NewMenu("Aether-Realist", showItem, quitItem)
-	studioApp.SetSystemTrayMenu(menu)
+	deskApp.SetSystemTrayMenu(menu)
 }
 
 func fetchIPList(ctx context.Context, callback func([]string, error)) {
@@ -226,14 +226,14 @@ func fetchIPList(ctx context.Context, callback func([]string, error)) {
 		client := &http.Client{Timeout: 8 * time.Second}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://ip.v2too.top/", nil)
 		if err != nil {
-			fyne.CurrentApp().Driver().RunOnMain(func() {
+			runOnMain(func() {
 				callback(nil, err)
 			})
 			return
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			fyne.CurrentApp().Driver().RunOnMain(func() {
+			runOnMain(func() {
 				callback(nil, err)
 			})
 			return
@@ -241,7 +241,7 @@ func fetchIPList(ctx context.Context, callback func([]string, error)) {
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			fyne.CurrentApp().Driver().RunOnMain(func() {
+			runOnMain(func() {
 				callback(nil, err)
 			})
 			return
@@ -260,10 +260,27 @@ func fetchIPList(ctx context.Context, callback func([]string, error)) {
 		if len(ips) > 12 {
 			ips = ips[:12]
 		}
-		fyne.CurrentApp().Driver().RunOnMain(func() {
+		runOnMain(func() {
 			callback(ips, nil)
 		})
 	}()
+}
+
+type mainRunner interface {
+	RunOnMain(func())
+}
+
+func runOnMain(fn func()) {
+	current := fyne.CurrentApp()
+	if current == nil {
+		fn()
+		return
+	}
+	if runner, ok := current.Driver().(mainRunner); ok {
+		runner.RunOnMain(fn)
+		return
+	}
+	fn()
 }
 
 func buildCommand(domain, psk, listen, rotate, padding, bestIP string) string {
