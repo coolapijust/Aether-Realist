@@ -43,7 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache MSYS2
+        uses: actions/cache@v4
+        id: cache-msys2
+        with:
+          path: C:\msys64
+          key: msys2-mingw64-${{ hashFiles('.github/workflows/build-client.yml') }}
+
       - name: Setup MSYS2
+        if: steps.cache-msys2.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -62,7 +70,17 @@ jobs:
           go-version: "1.21"
           cache: false
 
-      - name: Clear module cache
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\go\pkg\mod
+            %LocalAppData%\go-build
+          key: go-mod-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-mod-${{ runner.os }}-
+
+      - name: Clear and prepare
         shell: pwsh
         run: |
           go clean -modcache
@@ -71,8 +89,6 @@ jobs:
       - name: Download Go modules
         shell: pwsh
         run: |
-          $env:GOCACHE = "$env:RUNNER_TEMP\go-build"
-          $env:GOMODCACHE = "$env:RUNNER_TEMP\go-mod"
           $env:GOPROXY = "https://proxy.golang.org,direct"
           go mod tidy
           go mod download
@@ -80,8 +96,6 @@ jobs:
       - name: Build Windows EXE
         shell: pwsh
         run: |
-          $env:GOCACHE = "$env:RUNNER_TEMP\go-build"
-          $env:GOMODCACHE = "$env:RUNNER_TEMP\go-mod"
           $env:CGO_ENABLED = "1"
           $env:CC = "gcc"
           $env:GOOS = "windows"
