@@ -71,6 +71,11 @@ jobs:
           mkdir -p "/tmp/go-mod"
           mkdir -p "/tmp/go-tmp"
 
+      - name: Clear module cache
+        run: |
+          go clean -modcache
+          rm -f go.sum
+
       - name: Download dependencies
         env:
           GOCACHE: /tmp/go-build
