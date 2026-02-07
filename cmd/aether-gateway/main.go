@@ -38,16 +38,23 @@ var (
 func main() {
 	flag.Parse()
 
-	if *psk == "" {
-		log.Fatal("PSK is required")
-	}
-
 	// Support $PORT or $LISTEN_ADDR environment variables
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		*listenAddr = ":" + envPort
 	}
 	if envAddr := os.Getenv("LISTEN_ADDR"); envAddr != "" {
 		*listenAddr = envAddr
+	}
+
+	// Support $PSK and $DOMAIN environment variables
+	if envPSK := os.Getenv("PSK"); envPSK != "" && *psk == "" {
+		*psk = envPSK
+	}
+	domainEnv := os.Getenv("DOMAIN")
+
+	if *psk == "" {
+		log.Println("ERROR: PSK is required. Please set -psk flag or PSK environment variable.")
+		os.Exit(1)
 	}
 
 	// Try to load TLS certs, fallback to self-signed
@@ -60,7 +67,7 @@ func main() {
 
 	if certErr != nil || (*certFile == "" && *keyFile == "") {
 		log.Printf("No TLS certificates provided or failed to load. Generating self-signed certificate for testing...")
-		certs, certErr = generateSelfSignedCert()
+		certs, certErr = generateSelfSignedCert(domainEnv)
 		if certErr != nil {
 			log.Fatalf("Failed to generate self-signed cert: %v", certErr)
 		}
@@ -240,23 +247,32 @@ func writeError(w io.Writer, code uint16, msg string) {
 	w.Write(record)
 }
 
-func generateSelfSignedCert() (tls.Certificate, error) {
+func generateSelfSignedCert(domain string) (tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
 
+	subject := pkix.Name{
+		Organization: []string{"Aether Edge Relay Self-Signed"},
+	}
+	if domain != "" {
+		subject.CommonName = domain
+	}
+
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			Organization: []string{"Aether Edge Relay Self-Signed"},
-		},
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(time.Hour * 24 * 365),
+		Subject:      subject,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour * 24 * 365),
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+		DNSNames:             []string{domain},
+	}
+	if domain == "" {
+		template.DNSNames = []string{"localhost"}
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
