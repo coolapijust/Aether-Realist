@@ -52,6 +52,14 @@ func main() {
 	}
 	domainEnv := os.Getenv("DOMAIN")
 
+	// Support $SSL_CERT_FILE and $SSL_KEY_FILE for platform managed certs
+	if envCert := os.Getenv("SSL_CERT_FILE"); envCert != "" {
+		*certFile = envCert
+	}
+	if envKey := os.Getenv("SSL_KEY_FILE"); envKey != "" {
+		*keyFile = envKey
+	}
+
 	if *psk == "" {
 		log.Println("ERROR: PSK is required. Please set -psk flag or PSK environment variable.")
 		os.Exit(1)
