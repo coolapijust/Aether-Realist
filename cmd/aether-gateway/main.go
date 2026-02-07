@@ -40,12 +40,16 @@ func main() {
 
 	// Support $PORT or $LISTEN_ADDR environment variables
 	if envPort := os.Getenv("PORT"); envPort != "" {
-		*listenAddr = ":" + envPort
+		*listenAddr = "0.0.0.0:" + envPort
 		log.Printf("Config: Using PORT environment variable: %s", *listenAddr)
 	} else if envAddr := os.Getenv("LISTEN_ADDR"); envAddr != "" {
 		*listenAddr = envAddr
 		log.Printf("Config: Using LISTEN_ADDR environment variable: %s", *listenAddr)
 	} else {
+		// Ensure we bind to all interfaces if just a port is provided or default
+		if strings.HasPrefix(*listenAddr, ":") {
+			*listenAddr = "0.0.0.0" + *listenAddr
+		}
 		log.Printf("Config: Using default/flag listen address: %s", *listenAddr)
 	}
 
