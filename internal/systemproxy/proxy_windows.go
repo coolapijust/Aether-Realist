@@ -30,7 +30,7 @@ func EnableSocksProxy(address string) error {
 	if err != nil {
 		return err
 	}
-	proxyServer := fmt.Sprintf("socks5=%s:%s", host, port)
+	proxyServer := fmt.Sprintf("socks=%s:%s", host, port)
 	if err := exec.Command("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f").Run(); err != nil {
 		return fmt.Errorf("enable proxy registry: %w", err)
 	}
