@@ -135,9 +135,35 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	log.Printf("Listening on %s", *listenAddr)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	// 1. Start HTTP/3 (UDP) Server for WebTransport
+	go func() {
+		log.Printf("Starting HTTP/3 (UDP) server on %s", *listenAddr)
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatalf("HTTP/3 server failed: %v", err)
+		}
+	}()
+
+	// 2. Start HTTP/1.1 (TCP) Server for Health Checks & Alt-Svc
+	// This is CRITICAL for PaaS health checks which use TCP
+	httpServer := &http.Server{
+		Addr: *listenAddr,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Add Alt-Svc header to advertise HTTP/3 capability
+			// This tells clients "I speak H3 on this same port"
+			port := "443"
+			if _, p, err := net.SplitHostPort(*listenAddr); err == nil {
+				port = p
+			}
+			w.Header().Set("Alt-Svc", fmt.Sprintf(`h3=":%s"; ma=2592000`, port))
+
+			// Delegate to default mux (handles /health, /, /v1/api/sync)
+			http.DefaultServeMux.ServeHTTP(w, r)
+		}),
+	}
+
+	log.Printf("Starting HTTP/1.1 (TCP) server on %s (Health Check Ready)", *listenAddr)
+	if err := httpServer.ListenAndServe(); err != nil {
+		log.Fatalf("TCP server failed: %v", err)
 	}
 }
 
