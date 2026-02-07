@@ -52,7 +52,11 @@ Aether-Realist 现在支持独立的 Go 服务端 `aether-gateway`，支持 Dock
 
 ```bash
 cd deploy
-# 编辑 Caddyfile 中的域名
+# 1. 复制配置模板
+cp .env.example .env
+# 2. 编辑 .env 中的域名和密钥
+vi .env
+# 3. 启动容器
 docker-compose up -d
 ```
 

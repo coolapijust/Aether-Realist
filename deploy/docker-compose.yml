@@ -11,7 +11,7 @@ services:
       - "80:80/tcp"
       - "443:443/tcp" # Caddy 仅负责 TCP (HTTPS + Decoy)
     environment:
-      - DOMAIN=your-domain.com # 请在此处替换您的真实域名
+      - DOMAIN=${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
@@ -43,7 +43,7 @@ services:
     ports:
       - "443:8080/udp" # Aether 直接接管 UDP 443 (HTTP/3 WebTransport)
     environment:
-      - PSK=your_super_secret_token
+      - PSK=${PSK}
       - LISTEN_ADDR=:8080
     networks:
       - aether-net

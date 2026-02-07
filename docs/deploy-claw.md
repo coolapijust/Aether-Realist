@@ -10,18 +10,14 @@
 - 将本地 `deploy/` 目录同步到服务器（可以使用 `scp` 或 `git clone`）。
 
 ### 2. 关键操作步骤
-1. **配置域名**：将您的域名解析到 Claw VPS 的 IP。
-2. **修改 Caddyfile**：
-   - 进入 `deploy/` 目录，编辑 `Caddyfile`。
-   - 将 `your-domain.com` 替换为您的真实域名。
-3. **设置 PSK**：
-   - 编辑 `docker-compose.yml`。
-   - 修改 `aether-gateway` 服务下的 `PSK=your_super_secret_token`。
-4. **防火墙放行**：
+1. **配置环境变量**：
+   - 进入 `deploy/` 目录。
+   - `cp .env.example .env`。
+   - 编辑 `.env`，设置您的真实域名 `DOMAIN` 和同步后的 `PSK`。
+2. **防火墙放行**：
    - **核心步骤**：在 Claw 控制面板或服务器内（ufw/iptables）务必放行 **443/UDP** 和 **443/TCP**。
-5. **一键启动**：
+3. **一键启动**：
    ```bash
-   cd deploy
    docker-compose up -d
    ```
 
