@@ -11,13 +11,13 @@ COPY go.mod ./
 # go.sum might not exist if deleted, but copy if it does
 COPY go.sum* ./
 
+# Copy source code (needed for go mod tidy to see imports)
+COPY . .
+
 # Download dependencies
 # Force clean go.sum if needed in docker context? 
 # In CI we delete it. Here we just tidy.
 RUN go mod tidy
-
-# Copy source code
-COPY . .
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o aether-gateway ./cmd/aether-gateway
