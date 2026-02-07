@@ -1,0 +1,45 @@
+name: build-gateway
+
+on:
+  push:
+    paths:
+      - "cmd/aether-gateway/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/build-gateway.yml"
+  workflow_dispatch:
+
+jobs:
+  build-gateway:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: aether-gateway-linux
+            asset_name: aether-gateway
+          - os: windows-latest
+            artifact_name: aether-gateway-windows
+            asset_name: aether-gateway.exe
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        check-latest: true
+
+    - name: Build
+      run: |
+        go mod tidy
+        go build -v -o ${{ matrix.asset_name }} ./cmd/aether-gateway
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.asset_name }}

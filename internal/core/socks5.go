@@ -124,7 +124,7 @@ type streamConn struct {
 	core   *Core
 	local  net.Addr
 	remote net.Addr
-	reader *recordReader
+	reader *RecordReader
 	closed bool
 }
 
