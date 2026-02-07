@@ -18,11 +18,10 @@ import { useCoreStore } from '@/store/coreStore';
 
 export default function Rules() {
   const [activeTab, setActiveTab] = useState(0);
-  const { editingConfig, hasUnsavedChanges, updateEditingConfig, markChangesSaved } = useCoreStore();
+  const { editingConfig, hasUnsavedChanges, updateEditingConfig, applyConfig } = useCoreStore();
 
-  const handleSave = () => {
-    markChangesSaved();
-    // TODO: Call Core API to update config
+  const handleSave = async () => {
+    await applyConfig();
   };
 
   return (

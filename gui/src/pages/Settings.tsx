@@ -13,10 +13,7 @@ import {
   Divider,
   Button,
 } from '@mui/material';
-import { useCoreStore } from '@/store/coreStore';
-
 export default function Settings() {
-  const { currentConfig } = useCoreStore();
 
   return (
     <Box sx={{ p: 3 }}>

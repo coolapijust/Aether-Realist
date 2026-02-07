@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { 
   Box, 
   Drawer, 
@@ -17,8 +17,8 @@ import {
   Home as HomeIcon,
   Language as ProxyIcon,
   Shield as RulesIcon,
-  Activity as ConnectionsIcon,
-  FileText as LogsIcon,
+  SwapHoriz as ConnectionsIcon,
+  Article as LogsIcon,
   Settings as SettingsIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
@@ -54,7 +54,7 @@ export default function Layout({
   onToggleDarkMode,
 }: LayoutProps) {
   const theme = useTheme();
-  const { connectionState, coreState, connect, disconnect } = useCoreStore();
+  const { connectionState, connect, disconnect } = useCoreStore();
   
   useEffect(() => {
     // Auto-connect on mount

@@ -3,7 +3,6 @@ import type {
   CoreConfig, 
   CoreState, 
   StreamInfo, 
-  AnyCoreEvent,
   MetricsSnapshotEvent 
 } from '@/types/core';
 

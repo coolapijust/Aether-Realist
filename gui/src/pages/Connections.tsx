@@ -11,7 +11,6 @@ import {
   TableRow,
   IconButton,
   Chip,
-  Paper,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useCoreStore } from '@/store/coreStore';

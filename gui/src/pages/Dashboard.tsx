@@ -7,7 +7,6 @@ import {
   Button,
   Chip,
   Grid,
-  Tooltip,
 } from '@mui/material';
 import {
   PowerSettingsNew as PowerIcon,

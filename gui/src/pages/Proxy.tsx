@@ -9,7 +9,6 @@ import {
   ListItemText,
   Chip,
   Button,
-  Paper,
 } from '@mui/material';
 import { Speed as SpeedIcon } from '@mui/icons-material';
 import { useState } from 'react';
