@@ -58,12 +58,15 @@ type Core struct {
 	handlers     map[string]EventHandler
 	handlerMu    sync.RWMutex
 	subCounter   int64
+	mu           sync.RWMutex
 	
 	// Internal components (not exposed)
 	sessionMgr       *sessionManager
 	socksServer      *socks5Server
+	ruleEngine       *RuleEngine
 	metrics          *Metrics
 	metricsCollector *MetricsCollector
+	streams          map[string]*StreamInfo
 	eventBus         chan Event
 	ctx              context.Context
 	cancel           context.CancelFunc
