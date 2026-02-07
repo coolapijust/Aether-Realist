@@ -3,10 +3,8 @@ package api
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -79,9 +77,9 @@ func (s *Server) Start() error {
 	// WebSocket endpoint for events
 	mux.HandleFunc("/api/v1/events", s.handleEvents)
 	
-	// Static files (for embedded GUI)
-	// Serve embedded GUI files from embedded filesystem
-	mux.Handle("/", http.FileServer(http.FS(s.staticFS)))
+	// Static files (for standalone web UI)
+	// In production, GUI is served by Tauri, not by Core
+	mux.Handle("/", http.FileServer(http.Dir("./static")))
 	
 	s.server = &http.Server{
 		Addr:    s.addr,

@@ -51,9 +51,9 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": {
-      "bin/*": "./bin/"
-    },
+      "resources": [
+        "bin/*"
+      ],
       "shortDescription": "Aether Realist GUI",
       "targets": "all",
       "windows": {
