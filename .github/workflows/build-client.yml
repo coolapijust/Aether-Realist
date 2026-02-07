@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - "cmd/aether-client/**"
-      - "cmd/aether-studio/**"
       - "cmd/geo-test/**"
       - "gui/**"
       - "internal/**"
@@ -101,55 +100,3 @@ jobs:
         with:
           name: ${{ matrix.name }}
           path: gui/src-tauri/target/release/bundle/dmg/*.dmg
-
-  build-aether-studio:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          path-type: inherit
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-glfw
-            mingw-w64-x86_64-glew
-            mingw-w64-x86_64-mesa
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Clear module cache
-        shell: pwsh
-        run: |
-          go clean -modcache
-          Remove-Item -Force -ErrorAction SilentlyContinue go.sum
-
-      - name: Download dependencies
-        shell: pwsh
-        run: |
-          $env:GOPROXY = "https://proxy.golang.org,direct"
-          go mod tidy
-          go mod download
-
-      - name: Build Windows EXE
-        shell: pwsh
-        run: |
-          $env:CGO_ENABLED = "1"
-          $env:CC = "gcc"
-          $env:CGO_LDFLAGS = "-L/mingw64/lib -lglfw3 -lglew32 -lopengl32 -lgdi32"
-          echo "Starting build..."
-          go build -v -p 1 -ldflags="-H=windowsgui" -o aether-studio.exe ./cmd/aether-studio
-          echo "Build complete!"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: aether-studio-windows
-          path: aether-studio.exe
