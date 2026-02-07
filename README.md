@@ -42,22 +42,55 @@ wrangler secret put PSK
 wrangler deploy
 ```
 
-### 2. 客户端构建
+### 3. Gateway 服务端 (New)
+
+Aether-Realist 现在支持独立的 Go 服务端 `aether-gateway`，支持 Docker 部署。
+
+#### Docker 部署 (推荐)
+
+从 GitHub Container Registry 拉取镜像：
+
+```bash
+docker pull ghcr.io/coolapijust/aether-rea:latest
+```
+
+启动容器：
+```bash
+docker run -d \
+  --name aether-gateway \
+  -p 4433:4433/udp \
+  -p 4433:4433/tcp \
+  -v /path/to/certs:/certs \
+  ghcr.io/coolapijust/aether-rea:latest \
+  -cert /certs/fullchain.pem \
+  -key /certs/privkey.pem \
+  -psk "your-secret-password"
+```
+
+#### 手动编译
+
+```bash
+go build -o aether-gateway ./cmd/aether-gateway
+./aether-gateway -cert cert.pem -key key.pem -psk "secret"
+```
+
+## 客户端构建
 
 ```bash
 go build -o aether-client ./cmd/aether-client
 ```
 
-### 3. 启动示例
+### 启动示例
 
 ```bash
+# 连接到自建 Gateway
 ./aether-client \
-  --url https://your-domain.com/v1/api/sync \
-  --psk "$PSK" \
-  --auto-ip \
+  --url https://your-gateway-ip:4433/v1/api/sync \
+  --psk "your-secret-password" \
   --rotate 20m
 ```
 
 ## GitHub Actions
 
-`.github/workflows/build-client.yml` 会自动编译 Windows `.exe` 版本并作为 Artifact 输出。
+- `.github/workflows/build-gateway.yml`：自动构建 `aether-gateway` 二进制文件（Windows/Linux）并发布 Docker 镜像到 GHCR。
+- `.github/workflows/build-client.yml`：自动编译客户端 Windows `.exe` 版本。
