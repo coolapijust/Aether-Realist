@@ -65,7 +65,7 @@ docker-compose up -d
 
 #### 云平台部署 (ClawCloud / Cloud Run)
 
-由于支持 `$PORT` 环境变量和自动自签名证书，本服务可直接部署于容器托管平台。详情请参考 [deployment.md](docs/deployment.md#4-云平台部署-clawcloud--cloud-run--paas)。
+由于支持 `$PORT` 环境变量和自动自签名证书，本服务可直接部署于容器托管平台。详情请参考 [deployment.md](docs/deployment.md) 以及针对 Claw 的 **[ClawCloud 部署实操指南](docs/deploy-claw.md)**。
 
 #### 手动编译
 
