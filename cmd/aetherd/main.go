@@ -19,6 +19,8 @@ func main() {
 		listenAddr = flag.String("listen", "127.0.0.1:1080", "SOCKS5 listen address")
 		apiAddr    = flag.String("api", "127.0.0.1:9880", "HTTP API listen address")
 		configFile = flag.String("config", "", "Config file path")
+		url        = flag.String("url", "", "WebTransport endpoint URL")
+		psk        = flag.String("psk", "", "Pre-shared key")
 	)
 	flag.Parse()
 
@@ -33,6 +35,8 @@ func main() {
 	// Prepare config
 	config := core.SessionConfig{
 		ListenAddr: *listenAddr,
+		URL:        *url,
+		PSK:        *psk,
 	}
 
 	// Load config if specified

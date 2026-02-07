@@ -43,6 +43,10 @@ func newSessionManager(config *SessionConfig, onEvent func(Event), metrics *Metr
 
 // initialize sets up the dialer without connecting.
 func (sm *sessionManager) initialize() error {
+	if sm.config.URL == "" {
+		return nil
+	}
+
 	parsed, err := url.Parse(sm.config.URL)
 	if err != nil {
 		return fmt.Errorf("invalid url: %w", err)
@@ -72,6 +76,21 @@ func (sm *sessionManager) initialize() error {
 func (sm *sessionManager) connect() error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
+	// If no URL configured, stay idle
+	if sm.config.URL == "" {
+		return nil
+	}
+
+	if sm.dialer == nil {
+		// Try to initialize if needed (e.g. config updated)
+		if err := sm.initialize(); err != nil {
+			return err
+		}
+		if sm.dialer == nil {
+			return fmt.Errorf("dialer not initialized")
+		}
+	}
 
 	if sm.session != nil {
 		return fmt.Errorf("session already exists")
