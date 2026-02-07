@@ -34,7 +34,9 @@ jobs:
         check-latest: true
 
     - name: Build
+      shell: bash
       run: |
+        rm -f go.sum
         go mod tidy
         go build -v -o ${{ matrix.asset_name }} ./cmd/aether-gateway
 
