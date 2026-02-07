@@ -194,7 +194,7 @@ func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(rules)
 		
 	case http.MethodPost:
-		var rules []core.Rule
+		var rules []*core.Rule
 		if err := json.NewDecoder(r.Body).Decode(&rules); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -245,7 +245,11 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	config := s.core.GetActiveConfig()
-	if err := s.core.Start(config); err != nil {
+	if config == nil {
+		http.Error(w, "No active config", http.StatusBadRequest)
+		return
+	}
+	if err := s.core.Start(*config); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
