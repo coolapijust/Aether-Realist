@@ -33,9 +33,9 @@ RUN apk --no-cache add ca-certificates
 # Copy binary from builder
 COPY --from=builder /app/aether-gateway .
 
-# Expose port (WebTransport uses UDP/443 usually, but our app defaults to 4433)
-EXPOSE 4433/udp
-EXPOSE 4433/tcp
+# Expose port (WebTransport uses UDP/8080 by default in our new setup)
+EXPOSE 8080/udp
+EXPOSE 8080/tcp
 
 # Entrypoint
 ENTRYPOINT ["./aether-gateway"]

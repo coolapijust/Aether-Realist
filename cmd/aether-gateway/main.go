@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	listenAddr = flag.String("listen", ":4433", "Listen address")
+	listenAddr = flag.String("listen", ":8080", "Listen address")
 	certFile   = flag.String("cert", "cert.pem", "TLS certificate file")
 	keyFile    = flag.String("key", "key.pem", "TLS key file")
 	psk        = flag.String("psk", "", "Pre-shared key")
@@ -41,9 +41,12 @@ func main() {
 	// Support $PORT or $LISTEN_ADDR environment variables
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		*listenAddr = ":" + envPort
-	}
-	if envAddr := os.Getenv("LISTEN_ADDR"); envAddr != "" {
+		log.Printf("Config: Using PORT environment variable: %s", *listenAddr)
+	} else if envAddr := os.Getenv("LISTEN_ADDR"); envAddr != "" {
 		*listenAddr = envAddr
+		log.Printf("Config: Using LISTEN_ADDR environment variable: %s", *listenAddr)
+	} else {
+		log.Printf("Config: Using default/flag listen address: %s", *listenAddr)
 	}
 
 	// Support $PSK and $DOMAIN environment variables
