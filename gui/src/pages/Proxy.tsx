@@ -22,13 +22,7 @@ interface Node {
 }
 
 export default function Proxy() {
-  const [nodes] = useState<Node[]>([
-    { id: '1', name: '自动选择', address: 'auto', selected: true },
-    { id: '2', name: '香港节点 1', address: 'hk1.example.com:443', latency: 23 },
-    { id: '3', name: '香港节点 2', address: 'hk2.example.com:443', latency: 35 },
-    { id: '4', name: '日本节点', address: 'jp1.example.com:443', latency: 45 },
-    { id: '5', name: '美国节点', address: 'us1.example.com:443', latency: 120 },
-  ]);
+  const [nodes] = useState<Node[]>([]);
 
   const [selectedNode, setSelectedNode] = useState('1');
 

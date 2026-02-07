@@ -214,6 +214,15 @@ func handleStream(stream webtransport.Stream, psk string, streamID uint64) {
 		return
 	}
 
+	if record.Type == core.TypePing {
+		pongRecord := make([]byte, 4+core.RecordHeaderLength)
+		binary.BigEndian.PutUint32(pongRecord[0:4], uint32(core.RecordHeaderLength))
+		pongRecord[4] = core.TypePong
+		// Header fields 4-24 are zeroes or random, doesn't matter much for Pong
+		stream.Write(pongRecord)
+		return
+	}
+
 	if record.Type != core.TypeMetadata {
 		log.Printf("[Stream %d] Invalid record type: %d", streamID, record.Type)
 		writeError(stream, 0x0001, "metadata required")

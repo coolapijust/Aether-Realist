@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strings"
@@ -207,23 +209,74 @@ func (sm *sessionManager) dialSession(ctx context.Context) (*webtransport.Sessio
 }
 
 // monitorSession watches for session closure.
-func (sm *sessionManager) monitorSession() {
-	if sm.session == nil {
+	// Wait for context cancellation or session close in background
+	go func() {
+		<-sm.ctx.Done()
+		sm.mu.Lock()
+		if sm.session != nil {
+			reason := "closed"
+			sm.onEvent(NewSessionClosedEvent(sm.sessionID, &reason, nil))
+			sm.session = nil
+		}
+		sm.mu.Unlock()
+		sm.metrics.RecordSessionEnd()
+	}()
+
+	// Periodic ping loop
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sm.ctx.Done():
+			return
+		case <-ticker.C:
+			sm.pingOnce()
+		}
+	}
+}
+
+// pingOnce performs a single latency measurement.
+func (sm *sessionManager) pingOnce() {
+	sm.mu.RLock()
+	sess := sm.session
+	sm.mu.RUnlock()
+
+	if sess == nil {
 		return
 	}
 
-	// Wait for context cancellation or session close
-	<-sm.ctx.Done()
-
-	sm.mu.Lock()
-	if sm.session != nil {
-		reason := "closed"
-		sm.onEvent(NewSessionClosedEvent(sm.sessionID, &reason, nil))
-		sm.session = nil
+	start := time.Now()
+	
+	// Create a short-lived stream for ping
+	ctx, cancel := context.WithTimeout(sm.ctx, 5*time.Second)
+	defer cancel()
+	
+	stream, err := sess.OpenStreamSync(ctx)
+	if err != nil {
+		return
 	}
-	sm.mu.Unlock()
+	defer stream.Close()
 
-	sm.metrics.RecordSessionEnd()
+	// Send Ping record
+	pingRecord := make([]byte, 4+RecordHeaderLength)
+	binary.BigEndian.PutUint32(pingRecord[0:4], uint32(RecordHeaderLength))
+	pingRecord[4] = TypePing
+	
+	if _, err := stream.Write(pingRecord); err != nil {
+		return
+	}
+
+	// Read response (Pong or Error)
+	buf := make([]byte, 4+RecordHeaderLength)
+	if _, err := io.ReadFull(stream, buf); err != nil {
+		// Even if it fails, the time taken is a rough indicator of latency
+		// but we prefer clean responses
+		return
+	}
+
+	latency := time.Since(start).Milliseconds()
+	sm.metrics.RecordLatency(latency)
 }
 
 // generateSessionID creates a unique session identifier.

@@ -18,6 +18,8 @@ const (
 	RecordHeaderLength = 24
 	TypeMetadata       = 0x01
 	TypeData           = 0x02
+	TypePing           = 0x03
+	TypePong           = 0x04
 	TypeError          = 0x7f
 )
 

@@ -18,6 +18,14 @@ fn main() {
     let system_tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            println!("{}, {argv:?}, {cwd}", app.package_info().name);
+
+            let window = app.get_window("main").unwrap();
+            window.show().unwrap();
+            window.unminimize().unwrap();
+            window.set_focus().unwrap();
+        }))
         .manage(CoreProcess(Mutex::new(None)))
         .setup(|app| {
             // Start embedded aetherd

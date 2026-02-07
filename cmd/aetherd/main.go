@@ -12,9 +12,16 @@ import (
 
 	"aether-rea/internal/api"
 	"aether-rea/internal/core"
+	"aether-rea/internal/util"
 )
 
 func main() {
+	// Single instance protection
+	lock, err := util.AcquireLock("aetherd")
+	if err != nil {
+		log.Fatalf("Fatal: %v", err)
+	}
+	defer lock.Release()
 	var (
 		listenAddr = flag.String("listen", "127.0.0.1:1080", "SOCKS5 listen address")
 		httpAddr   = flag.String("http", "", "HTTP proxy listen address (e.g. 127.0.0.1:1081)")
@@ -67,13 +74,15 @@ func main() {
 
 	// Start Core with config
 	if err := c.Start(config); err != nil {
-		log.Fatalf("Failed to start core: %v", err)
+		log.Printf("Failed to start core: %v", err)
+		return
 	}
 
 	// Start HTTP API server
 	server := api.NewServer(c, *apiAddr)
 	if err := server.Start(); err != nil {
-		log.Fatalf("Failed to start API server: %v", err)
+		log.Printf("Failed to start API server: %v", err)
+		return
 	}
 
 	log.Printf("HTTP API listening on %s", server.Addr())

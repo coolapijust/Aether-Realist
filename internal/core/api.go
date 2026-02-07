@@ -265,14 +265,13 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 			}
 		}
 
-			// Auto-start if we have a valid config now
-			if err := c.Start(config); err != nil {
-				fmt.Printf("Auto-start failed: %v\n", err)
-				// We don't return error here because config was successfully updated/saved
-				// The user can see the error in the dashboard status or logs
-			}
-			return nil
+		// Auto-start if we have a valid config now
+		if err := c.Start(config); err != nil {
+			fmt.Printf("Auto-start failed: %v\n", err)
+			// We don't return error here because config was successfully updated/saved
+			// The user can see the error in the dashboard status or logs
 		}
+		return nil
 	} else if currentState == StateActive {
 		// If already active, we might need to reconnect session
 		if c.sessionMgr != nil {
@@ -355,7 +354,6 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if enabled {
 	if enabled {
 		if c.config == nil {
 			return fmt.Errorf("no config loaded")
@@ -452,6 +450,12 @@ func (c *Core) initialize() error {
 func (c *Core) cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Disable system proxy if it was enabled by this Core
+	if c.systemProxyEnabled {
+		systemproxy.DisableProxy()
+		c.systemProxyEnabled = false
+	}
 
 	if c.metricsCollector != nil {
 		c.metricsCollector.Stop()
