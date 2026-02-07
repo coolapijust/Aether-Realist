@@ -6,7 +6,6 @@ import {
   Button,
   Chip,
   Grid,
-  Divider,
 } from '@mui/material';
 import {
   PowerSettingsNew as PowerIcon,
@@ -35,7 +34,6 @@ export default function Dashboard() {
     activeStreamCount,
     totalUpload,
     totalDownload,
-    nextRotation,
     systemProxyEnabled,
     toggleSystemProxy,
   } = useCoreStore();
@@ -69,25 +67,52 @@ export default function Dashboard() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        首页
-      </Typography>
+    <Box sx={{ p: 2, height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          首页
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<PowerIcon />}
+            color={systemProxyEnabled ? 'error' : 'primary'}
+            onClick={() => toggleSystemProxy(!systemProxyEnabled)}
+          >
+            {systemProxyEnabled ? '系统代理已开启' : '开启系统代理'}
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SpeedIcon />}
+          >
+            测速
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshIcon />}
+          >
+            优选
+          </Button>
+        </Box>
+      </Box>
 
-      <Grid container spacing={3}>
-        {/* Status Card */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+      <Grid container spacing={2} sx={{ flex: 1, minHeight: 0 }}>
+        {/* Top Row: Status & Stats */}
+        <Grid item xs={12} md={3} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Status Card */}
+          <Card sx={{ flex: 1 }}>
+            <CardContent sx={{ p: '16px !important' }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 连接状态
               </Typography>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Box
                   sx={{
-                    width: 12,
-                    height: 12,
+                    width: 10,
+                    height: 10,
                     borderRadius: '50%',
                     bgcolor: getStatusColor() === 'success' ? 'success.main' :
                       getStatusColor() === 'error' ? 'error.main' :
@@ -99,114 +124,92 @@ export default function Dashboard() {
                   label={getStatusText()}
                   color={getStatusColor() as any}
                   size="small"
+                  sx={{ height: 24 }}
                 />
-                {currentSession && (
-                  <Typography variant="caption" color="text.secondary">
-                    #{currentSession.id.slice(-4)}
+              </Box>
+              <Typography variant="caption" display="block" color="text.secondary">
+                {currentSession ? formatDuration(currentSession.uptime) : '-'}
+              </Typography>
+              <Typography variant="caption" display="block" color="text.secondary">
+                {useCoreStore.getState().currentConfig.url || '未配置'}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* Traffic Stats */}
+          <Card sx={{ flex: 1 }}>
+            <CardContent sx={{ p: '16px !important' }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                实时流量
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <Box>
+                  <Typography variant="body2" color="primary.main">
+                    ↑ {formatBytes(totalUpload)}
                   </Typography>
-                )}
-              </Box>
-
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  会话时长: {currentSession ? formatDuration(currentSession.uptime) : '-'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  下次轮换: {nextRotation ? formatDuration(nextRotation - Date.now()) : '-'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  节点: {currentSession?.remoteAddr || '-'}
-                </Typography>
-                <Divider sx={{ my: 1, opacity: 0.5 }} />
-                <Typography variant="body2" color="text.secondary">
-                  SOCKS5: {useCoreStore.getState().currentConfig.listenAddr}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  HTTP: {useCoreStore.getState().currentConfig.httpProxyAddr}
+                  <Typography variant="body2" color="success.main">
+                    ↓ {formatBytes(totalDownload)}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {activeStreamCount} 连接
                 </Typography>
               </Box>
             </CardContent>
           </Card>
-        </Grid>
 
-        {/* Traffic Stats */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                流量统计
-              </Typography>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h4" color="primary.main" sx={{ fontWeight: 600 }}>
-                  ↑ {formatBytes(totalUpload)}
-                </Typography>
-                <Typography variant="h4" color="success.main" sx={{ fontWeight: 600 }}>
-                  ↓ {formatBytes(totalDownload)}
-                </Typography>
-              </Box>
-
-              <Typography variant="body2" color="text.secondary">
-                活跃连接: {activeStreamCount}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Latency */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+          {/* Latency */}
+          <Card sx={{ flex: 1 }}>
+            <CardContent sx={{ p: '16px !important', height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="subtitle2" color="text.secondary">
                 延迟
               </Typography>
-
-              <Typography variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
-                {metricsHistory.length > 0
-                  ? `${metricsHistory[metricsHistory.length - 1].latencyMs || '-'} ms`
-                  : '-'
-                }
-              </Typography>
-
-              {chartData.length > 0 && (
-                <Box sx={{ height: 60 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData.slice(-10)}>
-                      <Line
-                        type="monotone"
-                        dataKey="latency"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Box>
-              )}
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flex: 1 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  {metricsHistory.length > 0
+                    ? `${metricsHistory[metricsHistory.length - 1].latencyMs || '-'} ms`
+                    : '-'
+                  }
+                </Typography>
+              </Box>
+              <Box sx={{ height: 40, mt: 'auto' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData.slice(-10)}>
+                    <Line
+                      type="monotone"
+                      dataKey="latency"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Traffic Chart */}
-        <Grid item xs={12} md={8}>
-          <Card sx={{ height: '400px' }}>
-            <CardContent>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+        {/* Middle Column: Chart */}
+        <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
+          <Card sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ p: '16px !important', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 流量趋势
               </Typography>
-
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ flex: 1, minHeight: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData}>
                     <XAxis
                       dataKey="time"
-                      tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 10 }}
                       tickLine={false}
+                      interval={2}
                     />
                     <YAxis
-                      tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 10 }}
                       tickLine={false}
-                      tickFormatter={(v) => `${v.toFixed(0)} M`}
+                      tickFormatter={(v) => `${v.toFixed(0)}M`}
+                      width={30}
                     />
                     <Area
                       type="monotone"
@@ -231,43 +234,13 @@ export default function Dashboard() {
           </Card>
         </Grid>
 
-        {/* Real-time Logs */}
-        <Grid item xs={12} md={4}>
-          <LogPanel />
+        {/* Right Column: Logs */}
+        <Grid item xs={12} md={3} sx={{ display: 'flex' }}>
+          <Box sx={{ flex: 1, height: '100%' }}>
+            <LogPanel />
+          </Box>
         </Grid>
 
-        {/* Quick Actions */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<PowerIcon />}
-                color={systemProxyEnabled ? 'error' : 'primary'}
-                onClick={() => toggleSystemProxy(!systemProxyEnabled)}
-              >
-                {systemProxyEnabled ? '关闭系统代理' : '开启系统代理'}
-              </Button>
-
-              <Button
-                variant="outlined"
-                size="large"
-                startIcon={<SpeedIcon />}
-              >
-                节点测速
-              </Button>
-
-              <Button
-                variant="outlined"
-                size="large"
-                startIcon={<RefreshIcon />}
-              >
-                IP优选
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
       </Grid>
     </Box>
   );
