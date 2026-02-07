@@ -25,7 +25,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      - name: Build
+      - name: Build CLI Client
         run: |
           rm -f go.sum
           go mod tidy
@@ -35,6 +35,35 @@ jobs:
         with:
           name: aether-client-windows
           path: aether-client.exe
+
+  build-aetherd:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build Daemon
+        run: |
+          rm -f go.sum
+          go mod tidy
+          go build -o aetherd ./cmd/aetherd
+      - name: Upload artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aetherd-${{ matrix.os }}
+          path: aetherd
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aetherd-windows
+          path: aetherd.exe
 
   build-aether-gui:
     runs-on: ${{ matrix.os }}

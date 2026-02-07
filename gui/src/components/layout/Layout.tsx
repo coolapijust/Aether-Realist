@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Box, 
   Drawer, 
@@ -11,18 +11,21 @@ import {
   Typography,
   IconButton,
   Divider,
+  Chip,
 } from '@mui/material';
 import {
   Home as HomeIcon,
   Language as ProxyIcon,
-  Rule as RulesIcon,
-  Lan as ConnectionsIcon,
-  Article as LogsIcon,
+  Shield as RulesIcon,
+  Activity as ConnectionsIcon,
+  FileText as LogsIcon,
   Settings as SettingsIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
+  Power as PowerIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { useCoreStore } from '@/store/coreStore';
 
 const drawerWidth = 240;
 
@@ -51,6 +54,19 @@ export default function Layout({
   onToggleDarkMode,
 }: LayoutProps) {
   const theme = useTheme();
+  const { connectionState, coreState, connect, disconnect } = useCoreStore();
+  
+  useEffect(() => {
+    // Auto-connect on mount
+    connect();
+    return () => disconnect();
+  }, []);
+
+  const getConnectionColor = () => {
+    if (connectionState === 'connected') return 'success';
+    if (connectionState === 'connecting') return 'warning';
+    return 'error';
+  };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -67,13 +83,25 @@ export default function Layout({
           },
         }}
       >
-        <Toolbar sx={{ px: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Aether
-          </Typography>
-          <Typography variant="caption" sx={{ ml: 0.5, opacity: 0.7 }}>
-            Realist
-          </Typography>
+        <Toolbar sx={{ px: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Aether
+            </Typography>
+            <Typography variant="caption" sx={{ ml: 0.5, opacity: 0.7 }}>
+              Realist
+            </Typography>
+          </Box>
+          <Chip 
+            size="small" 
+            color={getConnectionColor() as any}
+            sx={{ 
+              width: 8, 
+              height: 8, 
+              minWidth: 8,
+              '& .MuiChip-label': { display: 'none' }
+            }}
+          />
         </Toolbar>
         
         <Divider />
@@ -101,10 +129,20 @@ export default function Layout({
         
         <Divider />
         
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'center' }}>
-          <IconButton onClick={onToggleDarkMode} color="inherit">
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <IconButton onClick={onToggleDarkMode} color="inherit" size="small">
             {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
+          
+          {connectionState === 'connected' ? (
+            <IconButton onClick={disconnect} color="error" size="small">
+              <PowerIcon />
+            </IconButton>
+          ) : (
+            <IconButton onClick={connect} color="success" size="small">
+              <PowerIcon />
+            </IconButton>
+          )}
         </Box>
       </Drawer>
 

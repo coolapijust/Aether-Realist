@@ -1,10 +1,13 @@
 import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import { api } from '@/lib/api';
+import { EventStream } from '@/lib/websocket';
 import type { 
   CoreState, 
   AnyCoreEvent, 
   StreamInfo, 
   CoreConfig,
-  MetricsSnapshotEvent 
 } from '@/types/core';
 
 interface CoreStore {
@@ -49,13 +52,21 @@ interface CoreStore {
   totalUpload: number;
   totalDownload: number;
   
-  // Actions
-  applyEvent: (event: AnyCoreEvent) => void;
-  setConnectionState: (state: 'disconnected' | 'connecting' | 'connected') => void;
-  updateEditingConfig: (config: Partial<CoreConfig>) => void;
-  markChangesSaved: () => void;
-  clearEvents: () => void;
+  // API Actions
+  connect: () => void;
+  disconnect: () => void;
+  fetchStatus: () => Promise<void>;
+  fetchConfig: () => Promise<void>;
+  applyConfig: () => Promise<void>;
+  startCore: () => Promise<void>;
+  stopCore: () => Promise<void>;
+  rotateSession: () => Promise<void>;
   closeStream: (streamId: string) => void;
+  
+  // Event handling
+  applyEvent: (event: AnyCoreEvent) => void;
+  updateEditingConfig: (config: Partial<CoreConfig>) => void;
+  clearEvents: () => void;
 }
 
 const defaultConfig: CoreConfig = {
@@ -73,158 +84,244 @@ const defaultConfig: CoreConfig = {
   blockAds: false,
 };
 
-export const useCoreStore = create<CoreStore>((set, get) => ({
-  connectionState: 'disconnected',
-  coreState: 'Idle',
-  streams: new Map(),
-  activeStreamCount: 0,
-  events: [],
-  maxEvents: 1000,
-  currentConfig: defaultConfig,
-  editingConfig: defaultConfig,
-  hasUnsavedChanges: false,
-  metricsHistory: [],
-  totalUpload: 0,
-  totalDownload: 0,
+let eventStream: EventStream | null = null;
 
-  applyEvent: (event) => {
-    const state = get();
-    
-    // Add to events
-    const newEvents = [...state.events, event];
-    if (newEvents.length > state.maxEvents) {
-      newEvents.shift();
-    }
-    
-    set({ events: newEvents });
-    
-    // Process event
-    switch (event.type) {
-      case 'core.stateChanged':
-        set({ coreState: event.to });
-        break;
+export const useCoreStore = create<CoreStore>()(
+  subscribeWithSelector(
+    immer((set, get) => ({
+      connectionState: 'disconnected',
+      coreState: 'Idle',
+      streams: new Map(),
+      activeStreamCount: 0,
+      events: [],
+      maxEvents: 1000,
+      currentConfig: defaultConfig,
+      editingConfig: defaultConfig,
+      hasUnsavedChanges: false,
+      metricsHistory: [],
+      totalUpload: 0,
+      totalDownload: 0,
+
+      connect: () => {
+        if (eventStream) return;
         
-      case 'session.established':
-        set({
-          currentSession: {
-            id: event.sessionId,
-            establishedAt: event.timestamp,
-            localAddr: event.localAddr,
-            remoteAddr: event.remoteAddr,
-            uptime: 0,
+        set({ connectionState: 'connecting' });
+        
+        eventStream = new EventStream(
+          (event) => get().applyEvent(event),
+          () => {
+            set({ connectionState: 'connected' });
+            get().fetchStatus();
+            get().fetchConfig();
           },
-        });
-        break;
+          () => set({ connectionState: 'disconnected' })
+        );
         
-      case 'session.closed':
-        if (state.currentSession?.id === event.sessionId) {
-          set({ currentSession: undefined });
+        eventStream.connect();
+      },
+
+      disconnect: () => {
+        eventStream?.disconnect();
+        eventStream = null;
+        set({ connectionState: 'disconnected' });
+      },
+
+      fetchStatus: async () => {
+        try {
+          const status = await api.getStatus();
+          set({ coreState: status.state });
+        } catch (err) {
+          console.error('Failed to fetch status:', err);
         }
-        break;
-        
-      case 'stream.opened': {
-        const newStreams = new Map(state.streams);
-        newStreams.set(event.streamId, {
-          id: event.streamId,
-          targetHost: event.target.host,
-          targetPort: event.target.port,
-          openedAt: event.timestamp,
-          state: 'active',
-          bytesSent: 0,
-          bytesReceived: 0,
-        });
-        set({ 
-          streams: newStreams, 
-          activeStreamCount: state.activeStreamCount + 1 
-        });
-        break;
-      }
-        
-      case 'stream.closed': {
-        const newStreams = new Map(state.streams);
-        const stream = newStreams.get(event.streamId);
-        if (stream) {
-          stream.state = 'closed';
-          stream.bytesSent = event.bytesSent;
-          stream.bytesReceived = event.bytesReceived;
-          newStreams.set(event.streamId, stream);
-        }
-        set({ 
-          streams: newStreams, 
-          activeStreamCount: Math.max(0, state.activeStreamCount - 1),
-          totalUpload: state.totalUpload + event.bytesSent,
-          totalDownload: state.totalDownload + event.bytesReceived,
-        });
-        break;
-      }
-        
-      case 'core.error':
-        set({
-          lastError: {
-            code: event.code,
-            message: event.message,
-            fatal: event.fatal,
-          },
-        });
-        break;
-        
-      case 'metrics.snapshot': {
-        const newHistory = [...state.metricsHistory, {
-          timestamp: event.timestamp,
-          upload: event.bytesSent,
-          download: event.bytesReceived,
-          activeStreams: event.activeStreams,
-          latencyMs: event.latencyMs,
-        }];
-        if (newHistory.length > 100) {
-          newHistory.shift();
-        }
-        set({ 
-          metricsHistory: newHistory,
-          totalUpload: event.bytesSent,
-          totalDownload: event.bytesReceived,
-        });
-        
-        if (state.currentSession) {
-          set({
-            currentSession: {
-              ...state.currentSession,
-              uptime: event.sessionUptime,
-            },
+      },
+
+      fetchConfig: async () => {
+        try {
+          const config = await api.getConfig();
+          set({ 
+            currentConfig: config,
+            editingConfig: config,
+            hasUnsavedChanges: false,
           });
+        } catch (err) {
+          console.error('Failed to fetch config:', err);
         }
-        break;
-      }
-        
-      case 'rotation.scheduled':
-        set({ nextRotation: event.nextRotation });
-        break;
-    }
-  },
+      },
 
-  setConnectionState: (connectionState) => set({ connectionState }),
-  
-  updateEditingConfig: (config) => set((state) => ({
-    editingConfig: { ...state.editingConfig, ...config },
-    hasUnsavedChanges: true,
-  })),
-  
-  markChangesSaved: () => set((state) => ({
-    currentConfig: { ...state.editingConfig },
-    hasUnsavedChanges: false,
-  })),
-  
-  clearEvents: () => set({ events: [] }),
-  
-  closeStream: (streamId) => {
-    // TODO: Call Core API to close stream
-    const state = get();
-    const newStreams = new Map(state.streams);
-    const stream = newStreams.get(streamId);
-    if (stream) {
-      stream.state = 'closing';
-      newStreams.set(streamId, stream);
-      set({ streams: newStreams });
-    }
-  },
-}));
+      applyConfig: async () => {
+        const { editingConfig } = get();
+        try {
+          await api.updateConfig(editingConfig);
+          set({ 
+            currentConfig: editingConfig,
+            hasUnsavedChanges: false,
+          });
+        } catch (err) {
+          console.error('Failed to apply config:', err);
+          throw err;
+        }
+      },
+
+      startCore: async () => {
+        try {
+          await api.start();
+        } catch (err) {
+          console.error('Failed to start core:', err);
+          throw err;
+        }
+      },
+
+      stopCore: async () => {
+        try {
+          await api.stop();
+        } catch (err) {
+          console.error('Failed to stop core:', err);
+          throw err;
+        }
+      },
+
+      rotateSession: async () => {
+        try {
+          await api.rotate();
+        } catch (err) {
+          console.error('Failed to rotate session:', err);
+          throw err;
+        }
+      },
+
+      closeStream: (streamId) => {
+        const state = get();
+        const newStreams = new Map(state.streams);
+        const stream = newStreams.get(streamId);
+        if (stream) {
+          stream.state = 'closing';
+          newStreams.set(streamId, stream);
+          set({ streams: newStreams });
+        }
+        // TODO: Call API to actually close stream
+      },
+
+      applyEvent: (event) => {
+        const state = get();
+        
+        // Add to events
+        const newEvents = [...state.events, event];
+        if (newEvents.length > state.maxEvents) {
+          newEvents.shift();
+        }
+        
+        set({ events: newEvents });
+        
+        // Process event
+        switch (event.type) {
+          case 'core.stateChanged':
+            set({ coreState: event.to });
+            break;
+            
+          case 'session.established':
+            set({
+              currentSession: {
+                id: event.sessionId,
+                establishedAt: event.timestamp,
+                localAddr: event.localAddr,
+                remoteAddr: event.remoteAddr,
+                uptime: 0,
+              },
+            });
+            break;
+            
+          case 'session.closed':
+            if (state.currentSession?.id === event.sessionId) {
+              set({ currentSession: undefined });
+            }
+            break;
+            
+          case 'stream.opened': {
+            const newStreams = new Map(state.streams);
+            newStreams.set(event.streamId, {
+              id: event.streamId,
+              targetHost: event.target.host,
+              targetPort: event.target.port,
+              openedAt: event.timestamp,
+              state: 'active',
+              bytesSent: 0,
+              bytesReceived: 0,
+            });
+            set({ 
+              streams: newStreams, 
+              activeStreamCount: state.activeStreamCount + 1 
+            });
+            break;
+          }
+            
+          case 'stream.closed': {
+            const newStreams = new Map(state.streams);
+            const stream = newStreams.get(event.streamId);
+            if (stream) {
+              stream.state = 'closed';
+              stream.bytesSent = event.bytesSent;
+              stream.bytesReceived = event.bytesReceived;
+              newStreams.set(event.streamId, stream);
+            }
+            set({ 
+              streams: newStreams, 
+              activeStreamCount: Math.max(0, state.activeStreamCount - 1),
+              totalUpload: state.totalUpload + event.bytesSent,
+              totalDownload: state.totalDownload + event.bytesReceived,
+            });
+            break;
+          }
+            
+          case 'core.error':
+            set({
+              lastError: {
+                code: event.code,
+                message: event.message,
+                fatal: event.fatal,
+              },
+            });
+            break;
+            
+          case 'metrics.snapshot': {
+            const newHistory = [...state.metricsHistory, {
+              timestamp: event.timestamp,
+              upload: event.bytesSent,
+              download: event.bytesReceived,
+              activeStreams: event.activeStreams,
+              latencyMs: event.latencyMs,
+            }];
+            if (newHistory.length > 100) {
+              newHistory.shift();
+            }
+            set({ 
+              metricsHistory: newHistory,
+              totalUpload: event.bytesSent,
+              totalDownload: event.bytesReceived,
+            });
+            
+            if (state.currentSession) {
+              set({
+                currentSession: {
+                  ...state.currentSession,
+                  uptime: event.sessionUptime,
+                },
+              });
+            }
+            break;
+          }
+            
+          case 'rotation.scheduled':
+            set({ nextRotation: event.nextRotation });
+            break;
+        }
+      },
+
+      updateEditingConfig: (config) => set((state) => ({
+        editingConfig: { ...state.editingConfig, ...config },
+        hasUnsavedChanges: true,
+      })),
+
+      clearEvents: () => set({ events: [] }),
+    }))
+  )
+);
