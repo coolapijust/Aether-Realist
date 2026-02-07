@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -39,6 +40,11 @@ func main() {
 
 	if *psk == "" {
 		log.Fatal("PSK is required")
+	}
+
+	// Support $PORT environment variable for cloud platforms (e.g., Cloud Run, ClawCloud)
+	if os.Getenv("PORT") != "" {
+		*listenAddr = ":" + os.Getenv("PORT")
 	}
 
 	// Try to load TLS certs, fallback to self-signed
