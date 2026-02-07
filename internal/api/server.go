@@ -82,9 +82,12 @@ func (s *Server) Start() error {
 	// In production, GUI is served by Tauri, not by Core
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 	
+	// Add CORS middleware
+	handler := corsMiddleware(mux)
+
 	s.server = &http.Server{
 		Addr:    s.addr,
-		Handler: mux,
+		Handler: handler,
 	}
 	
 	listener, err := net.Listen("tcp", s.addr)
@@ -440,4 +443,19 @@ func (s *Server) forwardEvents() {
 
 func generateSubscriberID() string {
 	return fmt.Sprintf("sub-%d", time.Now().UnixNano())
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

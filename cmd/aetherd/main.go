@@ -38,6 +38,11 @@ func main() {
 	log.SetOutput(io.MultiWriter(os.Stdout, c.GetLogWriter()))
 
 	log.Println("Starting Aether-Realist Daemon...")
+	
+	// Force disable system proxy on startup to prevent ghost state from previous crashes
+	if err := systemproxy.DisableProxy(); err != nil {
+		log.Printf("Warning: failed to clear system proxy: %v", err)
+	}
 
 	// Prepare config
 	config := core.SessionConfig{

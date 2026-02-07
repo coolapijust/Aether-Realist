@@ -20,6 +20,7 @@ type SessionConfig struct {
 	HttpProxyAddr  string         `json:"httpProxyAddr"`      // HTTP proxy listen address
 	DialAddr       string         `json:"dialAddr,omitempty"` // Override dial address (optional)
 	MaxPadding     int            `json:"maxPadding,omitempty"` // 0-65535, default 0
+	AllowInsecure  bool           `json:"allowInsecure,omitempty"` // Skip TLS verification
 	Rotation       RotationConfig `json:"rotation,omitempty"`   // Session rotation policy
 	
 	// Deprecated: Use Rotation.Enabled = false instead
@@ -249,6 +250,11 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 		}
 	}
 
+	// Update session manager config if it exists
+	if c.sessionMgr != nil {
+		c.sessionMgr.updateConfig(&config)
+	}
+
 	needsProxyRefresh := c.systemProxyEnabled && oldAddr != config.ListenAddr
 	c.mu.Unlock()
 	
@@ -267,9 +273,8 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 
 		// Auto-start if we have a valid config now
 		if err := c.Start(config); err != nil {
-			fmt.Printf("Auto-start failed: %v\n", err)
-			// We don't return error here because config was successfully updated/saved
-			// The user can see the error in the dashboard status or logs
+			// Return error so frontend knows it failed
+			return fmt.Errorf("auto-start failed: %w", err)
 		}
 		return nil
 	} else if currentState == StateActive {

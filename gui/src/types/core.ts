@@ -128,6 +128,7 @@ export interface CoreConfig {
   httpProxyAddr: string;
   dialAddr?: string;
   maxPadding: number;
+  allowInsecure?: boolean;
   rotation: {
     enabled: boolean;
     minIntervalMs: number;

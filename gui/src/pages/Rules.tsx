@@ -176,10 +176,19 @@ export default function Rules() {
 
               <TextField
                 label="最大填充 (bytes)"
-                type="number"
                 value={editingConfig.maxPadding}
                 onChange={(e) => updateEditingConfig({ maxPadding: parseInt(e.target.value) })}
                 sx={{ maxWidth: 200 }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editingConfig.allowInsecure || false}
+                    onChange={(e) => updateEditingConfig({ allowInsecure: e.target.checked })}
+                  />
+                }
+                label="允许不安全连接 (跳过证书验证)"
               />
             </Box>
           )}

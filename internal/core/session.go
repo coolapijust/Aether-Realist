@@ -43,6 +43,16 @@ func newSessionManager(config *SessionConfig, onEvent func(Event), metrics *Metr
 	}
 }
 
+// updateConfig updates the session manager's configuration.
+func (sm *sessionManager) updateConfig(config *SessionConfig) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	
+	sm.config = config
+	// Force dialer re-initialization on next connect
+	sm.dialer = nil
+}
+
 // initialize sets up the dialer without connecting.
 func (sm *sessionManager) initialize() error {
 	if sm.config.URL == "" {
@@ -65,8 +75,9 @@ func (sm *sessionManager) initialize() error {
 
 	sm.dialer = &webtransport.Dialer{
 		TLSClientConfig: &tls.Config{
-			ServerName: parsed.Hostname(),
-			NextProtos: []string{http3.NextProtoH3},
+			ServerName:         parsed.Hostname(),
+			NextProtos:         []string{http3.NextProtoH3},
+			InsecureSkipVerify: sm.config.AllowInsecure,
 		},
 		QUICConfig: quicConfig,
 	}
