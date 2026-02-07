@@ -29,8 +29,9 @@ jobs:
           cache: true
 
       - name: Build Core
+        shell: pwsh
         run: |
-          rm -f go.sum
+          Remove-Item -Force -ErrorAction SilentlyContinue go.sum
           go mod tidy
           go build -ldflags="-s -w" -o gui/src-tauri/bin/aetherd.exe ./cmd/aetherd
 
