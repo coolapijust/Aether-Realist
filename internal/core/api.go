@@ -89,11 +89,15 @@ type Core struct {
 	eventBus     chan Event
 	ctx          context.Context
 	cancel       context.CancelFunc
+	configManager *ConfigManager
 }
 
 // New creates a new Core instance.
 func New() *Core {
 	ctx, cancel := context.WithCancel(context.Background())
+	
+	cm, _ := NewConfigManager() // Ignore error for now, just won't save if fails
+	
 	c := &Core{
 		handlers:      make(map[string]EventHandler),
 		streams:       make(map[string]*StreamInfo),
@@ -101,6 +105,7 @@ func New() *Core {
 		eventBus:      make(chan Event, 100),
 		ctx:           ctx,
 		cancel:        cancel,
+		configManager: cm,
 	}
 	
 	c.stateMachine = NewStateMachine(func(from, to CoreState) {
@@ -233,6 +238,15 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 	}
 	
 	c.config = &config
+	
+	// Save to disk
+	if c.configManager != nil {
+		if err := c.configManager.Save(&config); err != nil {
+			fmt.Printf("Failed to save config: %v\n", err)
+			// Don't fail the request, just log
+		}
+	}
+
 	needsProxyRefresh := c.systemProxyEnabled && oldAddr != config.ListenAddr
 	c.mu.Unlock()
 	
@@ -249,9 +263,13 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 			}
 		}
 
-		if config.URL != "" {
 			// Auto-start if we have a valid config now
-			return c.Start(config)
+			if err := c.Start(config); err != nil {
+				fmt.Printf("Auto-start failed: %v\n", err)
+				// We don't return error here because config was successfully updated/saved
+				// The user can see the error in the dashboard status or logs
+			}
+			return nil
 		}
 	} else if currentState == StateActive {
 		// If already active, we might need to reconnect session

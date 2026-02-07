@@ -39,10 +39,27 @@ func main() {
 		PSK:        *psk,
 	}
 
-	// Load config if specified
-	if *configFile != "" {
-		// TODO: Load from file
-		log.Printf("Loading config from %s", *configFile)
+	// Load persisted config
+	cm, err := core.NewConfigManager()
+	if err == nil {
+		if loaded, err := cm.Load(); err == nil && loaded != nil {
+			log.Printf("Loaded persisted config")
+			// Merge with flags (flags take precedence if set, but here we just use loaded)
+			// For simplicity, if loaded exists, use it as base
+			if *url == "" && loaded.URL != "" {
+				config.URL = loaded.URL
+			}
+			if *psk == "" && loaded.PSK != "" {
+				config.PSK = loaded.PSK
+			}
+			// Keep flag listen addr if specified differently? 
+			// Actually better to respect saved config for all fields if available
+			// But flags are useful for overriding.
+			// Let's copy saved fields if flags are empty/default
+			if loaded.ListenAddr != "" && *listenAddr == "127.0.0.1:1080" {
+				config.ListenAddr = loaded.ListenAddr
+			}
+		}
 	}
 
 	// Start Core with config
