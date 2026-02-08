@@ -77,7 +77,7 @@ type Core struct {
 	config       *SessionConfig
 	editingConfig SessionConfig
 	handlers     map[string]EventHandler
-	handlerMu    sync.RWMutex
+	handlersMu   sync.RWMutex
 	subCounter   int64
 	mu           sync.RWMutex
 	
