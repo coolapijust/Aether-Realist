@@ -36,6 +36,7 @@ export default function Dashboard() {
     totalDownload,
     systemProxyEnabled,
     toggleSystemProxy,
+    lastError,
   } = useCoreStore();
 
   const isConnected = connectionState === 'connected' && coreState === 'Active';
@@ -130,9 +131,16 @@ export default function Dashboard() {
               <Typography variant="caption" display="block" color="text.secondary">
                 {currentSession ? formatDuration(currentSession.uptime) : '-'}
               </Typography>
-              <Typography variant="caption" display="block" color="text.secondary">
-                {useCoreStore.getState().currentConfig.url || '未配置'}
-              </Typography>
+
+              {coreState === 'Error' && lastError ? (
+                <Typography variant="caption" display="block" color="error.main" sx={{ fontWeight: 500, wordBreak: 'break-all' }}>
+                  {lastError.message}
+                </Typography>
+              ) : (
+                <Typography variant="caption" display="block" color="text.secondary" noWrap>
+                  {useCoreStore.getState().currentConfig.url || '未配置'}
+                </Typography>
+              )}
             </CardContent>
           </Card>
 

@@ -87,12 +87,12 @@ const defaultConfig: CoreConfig = {
   maxPadding: 128,
   rotation: {
     enabled: true,
-    minIntervalMs: 15 * 60 * 1000,
-    maxIntervalMs: 40 * 60 * 1000,
-    preWarmMs: 30 * 1000,
+    minIntervalMs: 5 * 60 * 1000,
+    maxIntervalMs: 10 * 60 * 1000,
+    preWarmMs: 10 * 1000,
   },
   bypassCN: true,
-  blockAds: false,
+  blockAds: true,
 };
 
 let eventStream: EventStream | null = null;
@@ -147,6 +147,11 @@ export const useCoreStore = create<CoreStore>()(
             coreState: status.state,
             systemProxyEnabled: status.proxy_enabled,
             activeStreamCount: status.active_streams,
+            lastError: status.last_error ? {
+              code: 'CORE_ERROR',
+              message: status.last_error,
+              fatal: false
+            } : undefined,
           });
         } catch (err) {
           console.error('Failed to fetch status:', err);
@@ -244,6 +249,9 @@ export const useCoreStore = create<CoreStore>()(
         switch (event.type) {
           case 'core.stateChanged':
             set({ coreState: event.to });
+            if (event.to === 'Active') {
+              set({ lastError: undefined });
+            }
             break;
 
           case 'session.established':

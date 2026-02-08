@@ -53,26 +53,25 @@ func main() {
 		PSK:           *psk,
 	}
 
-	// Load persisted config
+	// Load persisted config and combine with flags
 	cm, err := core.NewConfigManager()
 	if err == nil {
-		if loaded, err := cm.Load(); err == nil && loaded != nil {
-			log.Printf("Loaded persisted config")
-			// Merge with flags (flags take precedence if set, but here we just use loaded)
-			// For simplicity, if loaded exists, use it as base
-			if *url == "" && loaded.URL != "" {
-				config.URL = loaded.URL
-			}
-			if *psk == "" && loaded.PSK != "" {
-				config.PSK = loaded.PSK
-			}
+		if loaded, err := cm.Load(); err == nil {
+			log.Printf("Loaded configuration")
+			config = *loaded
 			
-			if loaded.ListenAddr != "" && *listenAddr == "127.0.0.1:1080" {
-				config.ListenAddr = loaded.ListenAddr
+			// Override with flags if explicitly provided
+			if *url != "" {
+				config.URL = *url
 			}
-			
-			if *httpAddr == "" && loaded.HttpProxyAddr != "" {
-				config.HttpProxyAddr = loaded.HttpProxyAddr
+			if *psk != "" {
+				config.PSK = *psk
+			}
+			if *listenAddr != "127.0.0.1:1080" {
+				config.ListenAddr = *listenAddr
+			}
+			if *httpAddr != "" {
+				config.HttpProxyAddr = *httpAddr
 			}
 		}
 	}

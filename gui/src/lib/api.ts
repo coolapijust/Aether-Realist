@@ -22,6 +22,7 @@ export class CoreAPI {
     uptime?: number;
     active_streams: number;
     proxy_enabled: boolean;
+    last_error?: string;
   }> {
     const res = await fetch(`${this.baseUrl}/status`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

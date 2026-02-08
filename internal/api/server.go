@@ -152,12 +152,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		StreamCount int              `json:"active_streams"`
 		ProxyEnabled bool             `json:"proxy_enabled"`
 		RulesCount   int              `json:"rules_count"`
+		LastError    string           `json:"last_error,omitempty"`
 	}{
 		State:       state,
 		Config:      config,
 		StreamCount: len(s.core.GetStreams()),
 		ProxyEnabled: s.core.IsSystemProxyEnabled(),
 		RulesCount:   len(s.core.GetRules()),
+		LastError:    s.core.GetLastError(),
 	}
 	
 	w.Header().Set("Content-Type", "application/json")

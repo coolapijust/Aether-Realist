@@ -9,6 +9,23 @@ import (
 
 const ConfigFileName = "config.json"
 
+// DefaultConfig returns the recommended default configuration.
+func DefaultConfig() *SessionConfig {
+	return &SessionConfig{
+		ListenAddr:    "127.0.0.1:1080",
+		HttpProxyAddr: "127.0.0.1:1081",
+		MaxPadding:    128,
+		Rotation: RotationConfig{
+			Enabled:       true,
+			MinIntervalMs: 300000, // 5 min
+			MaxIntervalMs: 600000, // 10 min
+			PreWarmMs:     10000,  // 10 sec
+		},
+		BypassCN: true,
+		BlockAds: true,
+	}
+}
+
 // ConfigManager handles configuration persistence.
 type ConfigManager struct {
 	configPath string
@@ -32,20 +49,22 @@ func NewConfigManager() (*ConfigManager, error) {
 	}, nil
 }
 
-// Load reads config from disk. Returns nil if file not found.
+// Load reads config from disk. Returns defaults if file not found.
 func (cm *ConfigManager) Load() (*SessionConfig, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
+	defaults := DefaultConfig()
+
 	data, err := os.ReadFile(cm.configPath)
 	if os.IsNotExist(err) {
-		return nil, nil // No config yet
+		return defaults, nil // Return defaults if no config yet
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	var config SessionConfig
+	config := *defaults // Start with defaults
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}

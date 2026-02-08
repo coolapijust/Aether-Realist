@@ -22,6 +22,8 @@ type SessionConfig struct {
 	MaxPadding     int            `json:"maxPadding,omitempty"` // 0-65535, default 0
 	AllowInsecure  bool           `json:"allowInsecure,omitempty"` // Skip TLS verification
 	Rotation       RotationConfig `json:"rotation,omitempty"`   // Session rotation policy
+	BypassCN       bool           `json:"bypassCN,omitempty"`   // Bypass China sites
+	BlockAds       bool           `json:"blockAds,omitempty"`   // Block advertisement
 	
 	// Deprecated: Use Rotation.Enabled = false instead
 	RotateInterval int `json:"rotateInterval,omitempty"` 
@@ -93,6 +95,7 @@ type Core struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	configManager *ConfigManager
+	lastError     error
 }
 
 // New creates a new Core instance.
@@ -133,10 +136,13 @@ func (c *Core) Start(config SessionConfig) error {
 	
 	// Initialize internal components
 	if err := c.initialize(); err != nil {
+		c.setLastError(err)
 		c.stateMachine.Transition(StateError)
 		return err
 	}
 	
+	// Consider success, clear error
+	c.setLastError(nil)
 	return c.stateMachine.Transition(StateActive)
 }
 
@@ -152,10 +158,12 @@ func (c *Core) Rotate() error {
 	
 	// Perform rotation
 	if err := c.performRotation(); err != nil {
+		c.setLastError(err)
 		c.stateMachine.Transition(StateError)
 		return err
 	}
 	
+	c.setLastError(nil)
 	return c.stateMachine.Transition(StateActive)
 }
 
@@ -214,6 +222,26 @@ func (c *Core) Subscribe(handler EventHandler) *Subscription {
 // GetState returns current FSM state (for initialization recovery only, do not poll).
 func (c *Core) GetState() string {
 	return string(c.stateMachine.State())
+}
+
+// GetLastError returns the last error that occurred.
+func (c *Core) GetLastError() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.lastError == nil {
+		return ""
+	}
+	return c.lastError.Error()
+}
+
+func (c *Core) setLastError(err error) {
+	c.mu.Lock()
+	c.lastError = err
+	c.mu.Unlock()
+	// Also emit error event
+	if err != nil {
+		c.emit(NewErrorEvent(err.Error(), "core", false))
+	}
 }
 
 // GetActiveConfig returns current config (read-only, for display).
@@ -344,6 +372,12 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	// Simple level detection
 	level := "info"
 	lowerMsg := strings.ToLower(msg)
+	
+	// Skip noisy metrics logs if they accidentally end up here
+	if strings.Contains(lowerMsg, "metrics.snapshot") || strings.Contains(lowerMsg, "metricshistory") {
+		return len(p), nil
+	}
+
 	if strings.Contains(lowerMsg, "error") || strings.Contains(lowerMsg, "failed") {
 		level = "error"
 	} else if strings.Contains(lowerMsg, "warn") {
@@ -424,6 +458,43 @@ func (c *Core) initialize() error {
 	c.metricsCollector.Start()
 
 	c.ruleEngine = NewRuleEngine(ActionProxy) // Default to proxy
+	
+	// Add default rules if enabled
+	if c.config.BlockAds {
+		c.ruleEngine.AddRule(&Rule{
+			ID:       "default-block-ads",
+			Name:     "Block Ads",
+			Priority: 1000, // High priority
+			Enabled:  true,
+			Action:   ActionBlock,
+			Matches: []MatchCondition{
+				{Type: MatchGeoSite, Value: "category-ads-all"},
+			},
+		})
+	}
+	
+	if c.config.BypassCN {
+		c.ruleEngine.AddRule(&Rule{
+			ID:       "default-bypass-cn",
+			Name:     "Bypass China",
+			Priority: 900,
+			Enabled:  true,
+			Action:   ActionDirect,
+			Matches: []MatchCondition{
+				{Type: MatchGeoIP, Value: "CN"},
+			},
+		})
+		c.ruleEngine.AddRule(&Rule{
+			ID:       "default-bypass-cn-site",
+			Name:     "Bypass China Sites",
+			Priority: 901,
+			Enabled:  true,
+			Action:   ActionDirect,
+			Matches: []MatchCondition{
+				{Type: MatchGeoSite, Value: "cn"},
+			},
+		})
+	}
 
 	c.sessionMgr = newSessionManager(c.config, c.emit, c.metrics)
 	if err := c.sessionMgr.initialize(); err != nil {
