@@ -49,6 +49,11 @@ func NewConfigManager() (*ConfigManager, error) {
 	}, nil
 }
 
+// GetConfigPath returns the path to the configuration file.
+func (cm *ConfigManager) GetConfigPath() string {
+	return cm.configPath
+}
+
 // Load reads config from disk. Returns defaults if file not found.
 func (cm *ConfigManager) Load() (*SessionConfig, error) {
 	cm.mu.Lock()

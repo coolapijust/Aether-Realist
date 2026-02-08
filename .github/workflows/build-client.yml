@@ -31,8 +31,7 @@ jobs:
       - name: Build Core
         shell: pwsh
         run: |
-          Remove-Item -Force -ErrorAction SilentlyContinue go.sum
-          go mod tidy
+          go mod download
           go build -ldflags="-s -w" -o gui/src-tauri/bin/aetherd.exe ./cmd/aetherd
 
       # Build GUI

@@ -17,12 +17,33 @@ import (
 )
 
 func main() {
+	// Add panic recovery to catch hidden crashes
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("CRITICAL PANIC RECOVERED: %v", r)
+			// Small sleep to ensure log is visible in console if it flash-opens
+			time.Sleep(2 * time.Second)
+			os.Exit(2)
+		}
+	}()
+
 	// Single instance protection
 	lock, err := util.AcquireLock("aetherd")
 	if err != nil {
-		log.Fatalf("Fatal: %v", err)
+		log.Printf("----------------------------------------------------------------")
+		log.Printf("ERROR: Could not start Aether-Realist Core.")
+		log.Printf("Detail: %v", err)
+		log.Printf("")
+		log.Printf("If no other instance is running, please manually delete:")
+		log.Printf("%s", filepath.Join(os.TempDir(), "aetherd.lock"))
+		log.Printf("----------------------------------------------------------------")
+		
+		// Don't use log.Fatalf to avoid confusing stack traces, just exit
+		time.Sleep(3 * time.Second)
+		os.Exit(1)
 	}
 	defer lock.Release()
+	
 	var (
 		listenAddr = flag.String("listen", "127.0.0.1:1080", "SOCKS5 listen address")
 		httpAddr   = flag.String("http", "", "HTTP proxy listen address (e.g. 127.0.0.1:1081)")
@@ -32,11 +53,26 @@ func main() {
 	)
 	flag.Parse()
 
+	// Load persisted config and combine with flags
+	cm, err := core.NewConfigManager()
+	var debugLog *os.File
+	if err == nil {
+		logPath := filepath.Join(filepath.Dir(cm.GetConfigPath()), "core-debug.log")
+		debugLog, _ = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+	}
+
 	// Create Core
 	c := core.New()
 
-	// Redirect logs to both stdout and Core event stream
-	log.SetOutput(io.MultiWriter(os.Stdout, c.GetLogWriter()))
+	// Redirect logs to stdout, Core event stream, and optionally a file
+	logWriters := []io.Writer{os.Stdout, c.GetLogWriter()}
+	if debugLog != nil {
+		logWriters = append(logWriters, debugLog)
+	}
+	log.SetOutput(io.MultiWriter(logWriters...))
+	if debugLog != nil {
+		defer debugLog.Close()
+	}
 
 	log.Println("Starting Aether-Realist Daemon...")
 	
@@ -53,11 +89,9 @@ func main() {
 		PSK:           *psk,
 	}
 
-	// Load persisted config and combine with flags
-	cm, err := core.NewConfigManager()
-	if err == nil {
+	if cm != nil {
 		if loaded, err := cm.Load(); err == nil {
-			log.Printf("Loaded configuration")
+			log.Printf("Loaded configuration from %s", cm.GetConfigPath())
 			config = *loaded
 			
 			// Override with flags if explicitly provided

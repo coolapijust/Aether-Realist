@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { 
-  Box, 
-  Drawer, 
-  List, 
-  ListItem, 
+import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
   ListItemButton,
-  ListItemIcon, 
+  ListItemIcon,
   ListItemText,
   Toolbar,
   Typography,
@@ -23,9 +23,12 @@ import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Power as PowerIcon,
+  Remove as MinimizeIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useCoreStore } from '@/store/coreStore';
+import { appWindow } from '@tauri-apps/api/window';
 
 const drawerWidth = 240;
 
@@ -46,16 +49,16 @@ const menuItems = [
   { id: 'settings', label: '设置', icon: SettingsIcon },
 ];
 
-export default function Layout({ 
-  children, 
-  currentPage, 
+export default function Layout({
+  children,
+  currentPage,
   onPageChange,
   darkMode,
   onToggleDarkMode,
 }: LayoutProps) {
   const theme = useTheme();
   const { connectionState, connect, disconnect } = useCoreStore();
-  
+
   useEffect(() => {
     // Auto-connect on mount
     connect();
@@ -69,94 +72,146 @@ export default function Layout({
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
-      {/* Sidebar */}
-      <Drawer
-        variant="permanent"
+    <>
+      {/* Draggable Title Bar for the whole app (thin strip) */}
+      <Box
+        data-tauri-drag-region
         sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: drawerWidth,
-            boxSizing: 'border-box',
-            borderRight: `1px solid ${theme.palette.divider}`,
-          },
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 32,
+          zIndex: theme.zIndex.drawer + 2,
+          pointerEvents: 'none', // Allow clicking through to underlying elements
+          '& > *': { pointerEvents: 'auto' } // But children should catch events
         }}
-      >
-        <Toolbar sx={{ px: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Aether
-            </Typography>
-            <Typography variant="caption" sx={{ ml: 0.5, opacity: 0.7 }}>
-              Realist
-            </Typography>
+      />
+
+      <Box sx={{ display: 'flex', height: '100vh' }}>
+        {/* Sidebar */}
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: drawerWidth,
+              boxSizing: 'border-box',
+              borderRight: `1px solid ${theme.palette.divider}`,
+            },
+          }}
+        >
+          <Toolbar
+            data-tauri-drag-region
+            sx={{
+              px: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'default',
+              WebkitAppRegion: 'drag' // Additional dragging support for CSS
+            }}
+          >
+            <Box
+              data-tauri-drag-region
+              sx={{ display: 'flex', alignItems: 'center', pointerEvents: 'none' }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Aether
+              </Typography>
+              <Typography variant="caption" sx={{ ml: 0.5, opacity: 0.7 }}>
+                Realist
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', WebkitAppRegion: 'no-drag' }}>
+              <IconButton size="small" onClick={() => appWindow.minimize()} sx={{ p: 0.5 }}>
+                <MinimizeIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+              <IconButton size="small" onClick={() => appWindow.close()} sx={{ p: 0.5 }}>
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Box>
+          </Toolbar>
+
+          <Divider />
+
+          <List sx={{ px: 1, py: 1 }}>
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <ListItem key={item.id} disablePadding>
+                  <ListItemButton
+                    selected={currentPage === item.id}
+                    onClick={() => onPageChange(item.id)}
+                  >
+                    <ListItemIcon>
+                      <Icon />
+                    </ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          <Divider />
+
+          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <IconButton onClick={onToggleDarkMode} color="inherit" size="small">
+              {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
+
+            <Chip
+              size="small"
+              color={getConnectionColor() as any}
+              sx={{
+                width: 8,
+                height: 8,
+                minWidth: 8,
+                '& .MuiChip-label': { display: 'none' }
+              }}
+            />
+
+            {connectionState === 'connected' ? (
+              <IconButton onClick={disconnect} color="error" size="small">
+                <PowerIcon />
+              </IconButton>
+            ) : (
+              <IconButton onClick={connect} color="success" size="small">
+                <PowerIcon />
+              </IconButton>
+            )}
           </Box>
-          <Chip 
-            size="small" 
-            color={getConnectionColor() as any}
-            sx={{ 
-              width: 8, 
-              height: 8, 
-              minWidth: 8,
-              '& .MuiChip-label': { display: 'none' }
+        </Drawer>
+
+        {/* Main content */}
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            bgcolor: 'background.default',
+            overflow: 'auto',
+            position: 'relative'
+          }}
+        >
+          {/* Top drag handle for main content */}
+          <Box
+            data-tauri-drag-region
+            sx={{
+              height: 32,
+              width: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              zIndex: 10
             }}
           />
-        </Toolbar>
-        
-        <Divider />
-        
-        <List sx={{ px: 1, py: 1 }}>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <ListItem key={item.id} disablePadding>
-                <ListItemButton
-                  selected={currentPage === item.id}
-                  onClick={() => onPageChange(item.id)}
-                >
-                  <ListItemIcon>
-                    <Icon />
-                  </ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              </ListItem>
-            );
-          })}
-        </List>
-        
-        <Box sx={{ flexGrow: 1 }} />
-        
-        <Divider />
-        
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <IconButton onClick={onToggleDarkMode} color="inherit" size="small">
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
-          
-          {connectionState === 'connected' ? (
-            <IconButton onClick={disconnect} color="error" size="small">
-              <PowerIcon />
-            </IconButton>
-          ) : (
-            <IconButton onClick={connect} color="success" size="small">
-              <PowerIcon />
-            </IconButton>
-          )}
+          {children}
         </Box>
-      </Drawer>
-
-      {/* Main content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          bgcolor: 'background.default',
-          overflow: 'auto',
-        }}
-      >
-        {children}
       </Box>
-    </Box>
+    </>
   );
 }

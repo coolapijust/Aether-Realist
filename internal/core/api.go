@@ -106,6 +106,7 @@ func New() *Core {
 	
 	c := &Core{
 		handlers:      make(map[string]EventHandler),
+		handlersMu:    sync.RWMutex{}, // Renamed to handlersMu for clarity
 		streams:       make(map[string]*StreamInfo),
 		activeStreams: make(map[string]io.ReadWriteCloser),
 		eventBus:      make(chan Event, 100),
@@ -117,31 +118,54 @@ func New() *Core {
 	c.stateMachine = NewStateMachine(func(from, to CoreState) {
 		c.emit(NewStateChangedEvent(from, to))
 	})
+
+	// Add event processing loop
+	go c.processEvents()
 	
 	return c
+}
+
+func (c *Core) processEvents() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case event := <-c.eventBus:
+			c.handlersMu.RLock()
+			for _, h := range c.handlers {
+				h(event)
+			}
+			c.handlersMu.RUnlock()
+		}
+	}
 }
 
 // Start transitions from Idle -> Starting -> Active.
 // Returns when session is established or error occurs.
 func (c *Core) Start(config SessionConfig) error {
+	fmt.Printf("[TRACE] Core.Start called\n")
 	if !c.stateMachine.CanTransition(StateStarting) {
 		return fmt.Errorf("cannot start from state %s", c.stateMachine.State())
 	}
 	
+	c.mu.Lock()
 	c.config = &config
+	c.mu.Unlock()
 	
 	if err := c.stateMachine.Transition(StateStarting); err != nil {
 		return err
 	}
 	
+	fmt.Printf("[TRACE] Transitioned to Starting, calling initialize\n")
 	// Initialize internal components
 	if err := c.initialize(); err != nil {
+		fmt.Printf("[TRACE] Initialize failed: %v\n", err)
 		c.setLastError(err)
 		c.stateMachine.Transition(StateError)
 		return err
 	}
 	
-	// Consider success, clear error
+	fmt.Printf("[TRACE] Initialize success, transitioning to Active\n")
 	c.setLastError(nil)
 	return c.stateMachine.Transition(StateActive)
 }
@@ -201,22 +225,23 @@ func (c *Core) CloseStream(handle StreamHandle) error {
 
 // Subscribe registers an event handler. Returns subscription for cancellation.
 func (c *Core) Subscribe(handler EventHandler) *Subscription {
-	c.handlerMu.Lock()
-	defer c.handlerMu.Unlock()
+	c.handlersMu.Lock()
+	defer c.handlersMu.Unlock()
 	
 	c.subCounter++
 	id := fmt.Sprintf("sub-%d", c.subCounter)
-	sub := &Subscription{
+	
+	c.handlers[id] = handler
+	
+	return &Subscription{
 		ID:      id,
 		Handler: handler,
 		cancel: func() {
-			c.handlerMu.Lock()
+			c.handlersMu.Lock()
 			delete(c.handlers, id)
-			c.handlerMu.Unlock()
+			c.handlersMu.Unlock()
 		},
 	}
-	c.handlers[id] = handler
-	return sub
 }
 
 // GetState returns current FSM state (for initialization recovery only, do not poll).
@@ -450,17 +475,20 @@ func (c *Core) runEventLoop() {
 
 // initialize sets up internal components.
 func (c *Core) initialize() error {
+	fmt.Printf("[TRACE] initialize entered\n")
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.metrics = NewMetrics() // Use constructor!
 	c.metricsCollector = NewMetricsCollector(c.metrics, 1*time.Second, c.emit)
 	c.metricsCollector.Start()
+	fmt.Printf("[TRACE] Metrics started\n")
 
 	c.ruleEngine = NewRuleEngine(ActionProxy) // Default to proxy
 	
 	// Add default rules if enabled
 	if c.config.BlockAds {
+		fmt.Printf("[TRACE] Adding default ads rules\n")
 		c.ruleEngine.AddRule(&Rule{
 			ID:       "default-block-ads",
 			Name:     "Block Ads",
@@ -474,6 +502,7 @@ func (c *Core) initialize() error {
 	}
 	
 	if c.config.BypassCN {
+		fmt.Printf("[TRACE] Adding default bypass-cn rules\n")
 		c.ruleEngine.AddRule(&Rule{
 			ID:       "default-bypass-cn",
 			Name:     "Bypass China",
@@ -496,6 +525,7 @@ func (c *Core) initialize() error {
 		})
 	}
 
+	fmt.Printf("[TRACE] Initializing session manager\n")
 	c.sessionMgr = newSessionManager(c.config, c.emit, c.metrics)
 	if err := c.sessionMgr.initialize(); err != nil {
 		return err
@@ -504,6 +534,7 @@ func (c *Core) initialize() error {
 		return err
 	}
 
+	fmt.Printf("[TRACE] Starting SOCKS5 server on %s\n", c.config.ListenAddr)
 	c.socksServer = newSocks5Server(c.config.ListenAddr, c)
 	if c.socksServer != nil {
 		if err := c.socksServer.start(); err != nil {
@@ -512,13 +543,13 @@ func (c *Core) initialize() error {
 	}
 
 	if c.config.HttpProxyAddr != "" {
+		fmt.Printf("[TRACE] Starting HTTP proxy on %s\n", c.config.HttpProxyAddr)
 		c.httpProxyServer = newHttpProxyServer(c.config.HttpProxyAddr, c)
 		if err := c.httpProxyServer.Start(); err != nil {
 			return err
 		}
 	}
-
-	go c.runEventLoop()
+	fmt.Printf("[TRACE] initialize finished\n")
 	return nil
 }
 

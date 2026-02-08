@@ -73,7 +73,8 @@
         "minWidth": 900,
         "resizable": true,
         "title": "Aether Realist",
-        "width": 1200
+        "width": 1200,
+        "decorations": false
       }
     ],
     "systemTray": {

@@ -13,20 +13,38 @@ type FileLock struct {
 }
 
 // AcquireLock tries to acquire a lock on the specified path.
-// If the lock cannot be acquired (e.g., another instance is running), it returns an error.
 func AcquireLock(name string) (*FileLock, error) {
-	// Use temp directory for the lock file
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("%s.lock", name))
 	
-	// Open with O_CREATE and O_EXCL to ensure only one instance creates/owns it
-	// On Windows, O_EXCL ensures that if the file exists, OpenFile fails.
+	// Check if lock file exists
+	if _, err := os.Stat(path); err == nil {
+		// File exists, check if process is alive
+		data, err := os.ReadFile(path)
+		if err == nil {
+			var pid int
+			if _, err := fmt.Sscanf(string(data), "%d", &pid); err == nil {
+				// Check if process is alive
+				proc, err := os.FindProcess(pid)
+				if err == nil {
+					// On Windows, FindProcess always succeeds, we must call Signal(0) to check
+					if err := proc.Signal(syscall.Signal(0)); err == nil {
+						return nil, fmt.Errorf("another instance of %s (PID %d) is already running", name, pid)
+					}
+				}
+			}
+		}
+		// Stale lock file, remove it
+		_ = os.Remove(path)
+	}
+
+	// Create new lock file
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
 	if err != nil {
-		if os.IsExist(err) {
-			return nil, fmt.Errorf("another instance of %s is already running (lock file: %s)", name, path)
-		}
 		return nil, fmt.Errorf("failed to create lock file: %w", err)
 	}
+
+	// Write PID to lock file
+	fmt.Fprintf(file, "%d", os.Getpid())
 
 	return &FileLock{
 		path: path,
