@@ -37,6 +37,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        go mod tidy
         go mod download
         go build -v -o ${{ matrix.asset_name }} ./cmd/aether-gateway
 

@@ -31,6 +31,7 @@ jobs:
       - name: Build Core
         shell: pwsh
         run: |
+          go mod tidy
           go mod download
           go build -ldflags="-s -w" -o gui/src-tauri/bin/aetherd.exe ./cmd/aetherd
 
