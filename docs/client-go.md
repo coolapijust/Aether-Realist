@@ -1,4 +1,4 @@
-# Go 客户端（参考实现）
+# Aether CLI Core 核心实现
 
 该客户端以 SOCKS5 形式提供入站，并通过 WebTransport 将流量封装为 Aether-Realist 记录。
 

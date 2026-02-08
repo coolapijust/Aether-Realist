@@ -1,6 +1,6 @@
 # Aether-Realist 协议定义（V3）
 
-> 状态：草案（Draft）
+> 状态：正式版本 (Finalized)
 
 ## 1. 术语与约定
 

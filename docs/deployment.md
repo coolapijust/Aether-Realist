@@ -1,144 +1,83 @@
-# 部署与环境配置
+# 生产部署指南
 
-## 1. Aether Gateway (Docker - 推荐)
-
-Aether-Realist 提供了独立的 Docker 镜像，支持 HTTP/3 WebTransport。
-
-### 启动命令
-
-> [!TIP]
-> **自动 TLS**：如果未提供 `-cert` 和 `-key` 参数，服务端将自动生成内存中的 **自签名证书**。这非常适合测试环境或处于反向代理（如 Caddy）后端的情况。
-
-```bash
-# 方式 A：使用自签名证书（快速测试）
-docker run -d \
-  --name aether-gateway \
-  -p 4433:4433/udp \
-  -p 4433:4433/tcp \
-  ghcr.io/coolapijust/aether-rea:latest \
-  -psk "your-strong-password"
-
-# 方式 B：使用自有证书（生产推荐）
-docker run -d \
-  --name aether-gateway \
-  -v /path/to/certs:/certs \
-  -p 4433:4433/udp \
-  -p 4433:4433/tcp \
-  ghcr.io/coolapijust/aether-rea:latest \
-  -cert /certs/fullchain.pem \
-  -key /certs/privkey.pem \
-  -psk "your-strong-password"
-```
-
-### 必需参数
-- `-cert`: TLS 证书文件路径。
-- `-key`: TLS 私钥文件路径。
-- `-psk`: 预共享密钥，客户端连接时需一致。
+本指南详细说明了 Aether-Realist Gateway 的生产级部署方案，重点关注高可用性、安全防御与自动化 TLS 管理。
 
 ---
 
-## 2. 反向代理与 TLS 自动化 (Caddy)
+## 1. 核心镜像部署 (Docker)
 
-如果您希望拥有自动化的公网证书（由 Let's Encrypt 提供），推荐使用 Caddy。
+Aether-Realist 提供了高性能的 Docker 镜像，内置 HTTP/3 WebTransport 支持与内存优化机制。
 
-### 方案 A：Caddy 获取证书 + Gateway 直接挂载 (推荐)
+### 生产推荐：Docker Compose 编排
 
-让 Caddy 负责证书更新，Gateway 直接读取 Caddy 生成的文件。
+建议采用以下编排方案，它集成了自动化 TLS 获取、伪装站点以及主动探测防御。
 
-**Caddyfile:**
-```caddy
-your-domain.com {
-    # 仅用于获取证书，不执行转发
-    tls your-email@example.com
-}
-```
-
-**Docker Compose 示例:**
 ```yaml
+version: '3.8'
+
 services:
-  gateway:
+  aether-gateway:
     image: ghcr.io/coolapijust/aether-rea:latest
+    container_name: aether-gateway
+    restart: always
+    environment:
+      - PSK=${PSK}
+      - DOMAIN=${DOMAIN}
     ports:
       - "443:4433/udp"
+      - "443:4433/tcp"
     volumes:
-      - caddy_data:/certs:ro
-    command: -cert /certs/caddy/certificates/acme-v02.api.letsencrypt.org-directory/your-domain.com/your-domain.com.crt -key /certs/caddy/certificates/acme-v02.api.letsencrypt.org-directory/your-domain.com/your-domain.com.key -psk "your-psk"
-
-volumes:
-  caddy_data:
-    external: true
+      - ./certs:/certs:ro
+    # 生产模式建议直接绑定正式证书
+    command: -cert /certs/fullchain.pem -key /certs/privkey.pem -psk "${PSK}"
 ```
 
-### 方案 B：Caddy 反向代理 (HTTP/3 转发)
+### 运行时参数说明
+- `-psk`: **必须**。所有客户端连接必须匹配此密钥。
+- `-cert / -key`: 证书与私钥路径。若未提供，网关将自动降级为自签名证书模式，适用于测试或负载均衡器后端。
+- `-listen`: 监听地址，默认为 `:4433`。
 
-> [!WARNING]
-> WebTransport 转发对反向代理的要求较高，请确保 Caddy 版本 >= 2.7。
+---
 
-**Caddyfile:**
+## 2. 自动化 TLS 证书管理 (Caddy)
+
+为了确保传输链路的极致安全，建议使用 Caddy 作为证书管理后端。
+
+### 方案：共享证书卷
+
+让 Caddy 负责证书的申领与自动续期，Gateway 通过共享卷读取证书文件。
+
+**Caddyfile 配置示例:**
 ```caddy
 your-domain.com {
-    reverse_proxy https://gateway:4433 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        transport http {
-            versions h3
-            tls_insecure_skip_verify # 允许 Gateway 使用自签名证书
-        }
-    }
+    tls your-email@example.com
+    # 仅作为证书来源，不进行协议层转发
 }
 ```
 
 ---
 
-## 3. Cloudflare Worker 配置 (Legacy)
+## 3. 云原生与边缘平台部署 (PaaS)
 
-### Wrangler 配置
+`aether-gateway` 已针对云原生环境进行了高度适配，支持在 Fly.io、Cloudflare Container 等容器平台上运行。
 
-在项目根目录添加 `wrangler.toml`，并启用 `nodejs_compat`：
+### 核心优化特性
+1. **动态端口适配**：自动识别 `$PORT` 环境变量，无需手动映射内部端口。
+2. **零配置自启动**：在缺失本地存储或证书的环境下，程序将自动生成临时安全链路以保障服务可用性。
 
-```toml
-name = "aether-realist"
-main = "src/worker.js"
-compatibility_date = "2024-02-06"
-nodejs_compat = true
-
-[vars]
-SECRET_PATH = "/v1/api/sync"
-```
-
-- `SECRET_PATH` 用于控制 WebTransport 入口路径。
-- 根路径 `/` 将返回静态页面以满足伪装需求。
-
-### Secret 管理
-
-`PSK` 必须通过 Wrangler secret 设置：
-
-```bash
-wrangler secret put PSK
-```
-
-部署时请确保环境变量已经生效。
+### 部署要点
+- **协议限制**：务必确认平台已放行 **UDP** 流量，否则 WebTransport 无法建立连接。
+- **健康检查**：
+  - **推荐路径**：`/` (根路径)。
+  - **安全性说明**：由于网关内置主动探测防御，非协议请求访问根路径将返回“伪装站点”内容。使用 `/` 作为健康检查可以完美隐藏服务特征，避免暴露协议入口路径 `/v1/api/sync`。
 
 ---
 
-## 4. 云平台部署 (ClawCloud / Cloud Run / PaaS)
+## 4. 其它环境说明
 
-`aether-gateway` 已针对云原生环境进行了优化，支持通过环境变量自动配置。
+项目依然保留了在 Cloudflare Workers 等边缘脚本环境运行的能力（源码参考 `src/worker.js`）。
 
-### 核心特性
-1. **端口自动适配**：服务端会自动识别并监听 `$PORT` 环境变量指定的端口。
-2. **自动 TLS**：在非持久化存储环境（如无证书挂载）下，会自动生成自签名证书以满足 WebTransport 的加密要求。
+> [!NOTE]
+> **当前状态**：目前 Cloudflare Worker 尚未原生支持 WebTransport。虽然我们的代码已按照标准实现，但仍需等待 Cloudflare 平台开启该功能后即可直接投入使用。
 
-### 部署步骤 (ClawCloud / Cloud Run)
-
-1. **选择镜像**：使用 `ghcr.io/coolapijust/aether-rea:latest`。
-2. **配置环境变量**：
-   - `PSK`：设置您的预共享密钥（必填）。
-3. **端口设置**：
-   - 确保外部端口映射正确（通常为 443 或 3000）。
-   - 内部端口：程序会自动绑定到平台提供的 `$PORT`。
-4. **协议选择**：
-   - **重要**：必须启用 **UDP** 支持，因为 WebTransport 运行在 HTTP/3 UDP 之上。
-
-### 客户端连接建议
-由于自签名证书可能导致浏览器或部分客户端报错，建议在客户端启动参数中添加相关跳过验证的逻辑（如果支持），或者在生产环境通过方案 A/B 挂载正式域名证书。
+在极高性能或低延迟要求场景下，强烈建议优先使用 Go 版本的 Gateway 以获得完整的性能优势与更强的防御特性。

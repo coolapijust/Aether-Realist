@@ -1,100 +1,99 @@
 # Aether-Realist
 
-Aether-Realist 是一套运行于 WebTransport (HTTP/3) 之上的无状态、分段式、可配置边缘中转协议。该仓库包含协议规范、Cloudflare Worker 参考实现、Go 客户端与 GUI 配置台。需要等待Cloudflare Worker原生支持WebTransport 才可使用。
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-V3.0.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go">
+  <img src="https://img.shields.io/badge/WebTransport-HTTP%2F3-orange.svg" alt="WebTransport">
+</p>
 
-## 目录结构
+Aether-Realist 是一套基于 **WebTransport (HTTP/3)** 协议的高性能、无状态、生产级边缘中转系统。它专为现代复杂网络环境设计，通过深度的协议混淆与主动探测防御技术，提供极致安全且稳定的隐蔽加密链路。
 
-- `docs/aether-realist-protocol.md`：协议规范 (Record framing / Metadata / Error)。
-- `docs/design.md`：架构设计、安全防御与性能优化详解。
-- `docs/deployment.md`：现代化 Docker 编排与 Caddy 网关部署。
-- `cmd/aetherd`：本地后台守护进程 (Go)。
-- `gui/`：基于 Tauri + React 的现代化 GUI 面板。
+---
 
-## 架构概览
+## 🚀 核心优势
 
-1. **WebTransport 会话**：客户端通过 `/v1/api/sync` 建立 WebTransport session。
-2. **Metadata Record**：首包描述目标地址、端口与选项（AES-GCM + HKDF）。
-3. **Record Switcher**：Worker 仅转发数据，严格遵循背压。
-4. **Session Rotation**：客户端定期轮换 session，降低流量画像特征。
+### 🛡️ 极致安全与隐蔽
+*   **主动探测防御**：内置高度智能的流量识别引擎。当检测到非协议特征的探测（如非法路径扫描或爬虫）时，系统会自动分流至内置的伪装站点，并返回欺骗性的诱导信息，令攻击者无从下手。
+*   **元数据加密 (AES-GCM)**：所有流建立信息均经过 `AES-128-GCM` 加密，密钥通过 HKDF 算法从 PSK 动态派生，确保即便握手过程也被完全掩盖。
+*   **会话动态轮换 (Rotation)**：支持基于时间或流量的自动连接轮换，彻底消除长连接带来的统计学指纹特征。
 
-## GUI 配置台
+### ⚡ 卓越性能
+*   **WebTransport 原生驱动**：利用 HTTP/3 的 QUIC 多路复用特性，彻底解决传统代理的队头阻塞（Head-of-Line Blocking）问题。
+*   **0-RTT 建连**：在支持的环境下实现零延迟建连，让代理体验如原生网络般丝滑。
+*   **高效背压控制**：服务端采用全流式转发架构，支持智能背压调度，确保在大带宽突发时依然保持极低的 CPU 与内存占用。
 
-`ui/` 提供一个轻量控制台，可完成：
+---
 
-- 生成客户端启动命令。
-- 读取 https://ip.v2too.top/ 并展示优选 IP。
-- 提示 `--dial-addr` 的最佳接入方式。
+## 🏗️ 系统架构
 
-桌面端可以使用 `cmd/aether-studio`，该程序将 Client Studio 的能力移植进本地 GUI，并补充系统代理开关与托盘管理入口。
+Aether-Realist 采用解耦的微内核架构，确保了系统的高度灵活性：
 
-```bash
-go build -o aether-studio ./cmd/aether-studio
+```mermaid
+graph TD
+    User([用户/浏览器]) -- SOCKS5/HTTP --> Core[Aether Core / aetherd]
+    Core -- WebSocket Events --> GUI[Dashboard GUI]
+    GUI -- REST API --> Core
+    
+    subgraph Local [本地环境]
+    Core
+    GUI
+    end
+    
+    Core -- WebTransport/UDP --> Gateway[Aether Gateway / Server]
+    
+    subgraph Cloud [云端/边缘节点]
+    Gateway -- TCP --> Target[目标互联网资源]
+    Gateway -- Bypass --> Decoy[伪装站点]
+    end
 ```
 
-## 部署方法
+### 组件说明
+1.  **Aether Gateway (服务端)**: 核心中转站。支持传统的 Linux/Windows 服务器、云原生 PaaS 平台以及 Docker 容器化一键部署。
+2.  **Aether Core (aetherd)**: 本地守护进程。负责协议封装、系统代理自动配置、路由规则匹配及连接生命周期管理。
+3.  **Aether Dashboard (GUI)**: 跨平台桌面控制面板。基于 Tauri + React 构建，提供实时的流量拓扑、延迟监测及可视化规则编辑。
 
-### 1. Worker 部署
+---
 
-参考 `docs/deployment.md`：
+## 🛠️ 快速开始
 
-```bash
-wrangler secret put PSK
-wrangler deploy
-```
-
-### 3. Gateway 服务端 (New)
-
-Aether-Realist 现在支持独立的 Go 服务端 `aether-gateway`，支持 Docker 部署。
-
-#### Docker 部署 (生产推荐)
-
-使用我们优化后的编排方案，包含 Caddy 自动化 TLS 和主动探测防御：
+### 1. 服务端部署
+推荐在生产环境通过 Docker Compose 部署。该方案集成了 **Caddy 自动化 TLS** 证书申领与伪装站点：
 
 ```bash
 cd deploy
-# 1. 复制配置模板
-cp .env.example .env
-# 2. 编辑 .env 中的域名和密钥
-vi .env
-# 3. 启动容器
+cp .env.example .env && vi .env # 配置域名与私钥
 docker-compose up -d
 ```
+> 详细参数配置请参阅：[部署指南](docs/deployment.md)
 
-该方案将启动三个容器：
-1. **Gateway**: 基于 Caddy 的主动防御网关。
-2. **Decoy Site**: 自动分流非协议流量到伪装站点。
-3. **Backend**: Aether 核心服务端。
-
-详情请参考 [deployment.md](docs/deployment.md)。
-
-#### 云平台部署 (ClawCloud / Cloud Run)
-
-由于支持 `$PORT` 环境变量和自动自签名证书，本服务可直接部署于容器托管平台。详情请参考 [deployment.md](docs/deployment.md) 以及针对 Claw 的 **[ClawCloud 部署实操指南](docs/deploy-claw.md)**。
-
-#### 手动编译
+### 2. 本地客户端
+您可以直接运行控制面板程序（GUI），它会自动启动并管理核心进程。
 
 ```bash
-go build -o aether-gateway ./cmd/aether-gateway
-./aether-gateway -cert cert.pem -key key.pem -psk "secret"
+# 若需手动编译核心进程
+go build -o aetherd.exe ./cmd/aetherd
 ```
 
-## 客户端构建
+---
 
-```bash
-go build -o aether-client ./cmd/aether-client
-```
+## 📚 开发者手册
 
-### 启动示例
+为了方便二次开发与集成，我们提供了详尽的规格说明：
 
-```bash
-# 连接到自建 Gateway
-./aether-client \
-  --url https://your-gateway-ip:4433/v1/api/sync \
-  --psk "your-secret-password" \
-  --rotate 20m
-```
+*   📄 **[协议规范手册](docs/aether-realist-protocol.md)**：深入了解 Record 封装、Nonce 派生及状态机流转。
+*   🔌 **[API 规范指南](docs/api-specification.md)**：详细定义了本地 RESTful 控制接口与 WebSocket 实时事件流订阅。
+*   🗺️ **[设计哲学详述](docs/design.md)**：探讨防探测机制、背压策略与系统代理优化背后的细节。
 
-## GitHub Actions
+---
 
-- `.github/workflows/build-gateway.yml`：自动构建 `aether-gateway` 二进制文件（Windows/Linux）并发布 Docker 镜像到 GHCR。
-- `.github/workflows/build-client.yml`：自动编译客户端 Windows `.exe` 版本。
+## 🌐 兼容性与兼容模式
+
+### Cloudflare Worker 支持
+项目保留了对 Cloudflare Worker 的代码级支持（见 `src/`）。
+> **注意**：目前 Cloudflare Worker 尚未开启原生 WebTransport 支持。一旦平台功能就绪，现有代码即可立即生效。当前建议优先部署 Go 版本的 Gateway。
+
+---
+
+## 📄 开源协议
+本项目采用 [MIT License](LICENSE) 许可协议。
