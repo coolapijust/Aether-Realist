@@ -456,12 +456,12 @@ func (c *Core) runEventLoop() {
 	for {
 		select {
 		case event := <-c.eventBus:
-			c.handlerMu.RLock()
+			c.handlersMu.RLock()
 			handlers := make([]EventHandler, 0, len(c.handlers))
 			for _, h := range c.handlers {
 				handlers = append(handlers, h)
 			}
-			c.handlerMu.RUnlock()
+			c.handlersMu.RUnlock()
 			
 			for _, h := range handlers {
 				go h(event) // Async dispatch to prevent blocking
