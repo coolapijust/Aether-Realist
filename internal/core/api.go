@@ -418,11 +418,7 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if enabled {
-		if c.config == nil {
-			return fmt.Errorf("no config loaded")
-		}
-		
+
 	if enabled {
 		if c.config == nil {
 			return fmt.Errorf("no config loaded")
