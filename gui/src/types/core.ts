@@ -124,19 +124,19 @@ export interface StreamInfo {
 export interface CoreConfig {
   url: string;
   psk: string;
-  listenAddr: string;
-  httpProxyAddr: string;
-  dialAddr?: string;
-  maxPadding: number;
-  allowInsecure?: boolean;
+  listen_addr: string;
+  http_proxy_addr: string;
+  dial_addr?: string;
+  max_padding: number;
+  allow_insecure?: boolean;
   rotation: {
     enabled: boolean;
-    minIntervalMs: number;
-    maxIntervalMs: number;
-    preWarmMs: number;
+    min_interval_ms: number;
+    max_interval_ms: number;
+    pre_warm_ms: number;
   };
-  bypassCN?: boolean;
-  blockAds?: boolean;
+  bypass_cn?: boolean;
+  block_ads?: boolean;
 }
 
 export interface NodeInfo {

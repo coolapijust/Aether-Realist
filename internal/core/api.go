@@ -16,17 +16,17 @@ import (
 type SessionConfig struct {
 	URL            string         `json:"url"`                // https://host/path
 	PSK            string         `json:"psk"`                // Pre-shared key
-	ListenAddr     string         `json:"listenAddr"`         // SOCKS5 listen address
-	HttpProxyAddr  string         `json:"httpProxyAddr"`      // HTTP proxy listen address
-	DialAddr       string         `json:"dialAddr,omitempty"` // Override dial address (optional)
-	MaxPadding     int            `json:"maxPadding,omitempty"` // 0-65535, default 0
-	AllowInsecure  bool           `json:"allowInsecure,omitempty"` // Skip TLS verification
+	ListenAddr     string         `json:"listen_addr"`         // SOCKS5 listen address
+	HttpProxyAddr  string         `json:"http_proxy_addr"`      // HTTP proxy listen address
+	DialAddr       string         `json:"dial_addr,omitempty"` // Override dial address (optional)
+	MaxPadding     int            `json:"max_padding,omitempty"` // 0-65535, default 0
+	AllowInsecure  bool           `json:"allow_insecure,omitempty"` // Skip TLS verification
 	Rotation       RotationConfig `json:"rotation,omitempty"`   // Session rotation policy
-	BypassCN       bool           `json:"bypassCN,omitempty"`   // Bypass China sites
-	BlockAds       bool           `json:"blockAds,omitempty"`   // Block advertisement
+	BypassCN       bool           `json:"bypass_cn,omitempty"`   // Bypass China sites
+	BlockAds       bool           `json:"block_ads,omitempty"`   // Block advertisement
 	
 	// Deprecated: Use Rotation.Enabled = false instead
-	RotateInterval int `json:"rotateInterval,omitempty"` 
+	RotateInterval int `json:"rotate_interval,omitempty"` 
 }
 
 // TargetAddress represents a destination host:port.
@@ -423,17 +423,22 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 			return fmt.Errorf("no config loaded")
 		}
 		
+		// Prioritize HTTP proxy for system proxy (better compatibility)
 		addr := c.config.HttpProxyAddr
 		isHttp := true
+		
+		// Fallback to SOCKS5 if HTTP proxy is not configured or disabled
 		if addr == "" {
 			addr = c.config.ListenAddr
 			isHttp = false
+			fmt.Printf("[WARN] System proxy falling back to SOCKS5 (not recommended for Win11/UWP)\n")
 		}
 		
 		if addr == "" {
 			return fmt.Errorf("no proxy address configured")
 		}
 		
+		fmt.Printf("[TRACE] Enabling system proxy: %s (http=%v)\n", addr, isHttp)
 		if err := systemproxy.EnableProxy(addr, isHttp); err != nil {
 			return err
 		}

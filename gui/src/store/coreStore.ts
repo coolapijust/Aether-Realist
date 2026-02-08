@@ -82,17 +82,17 @@ interface CoreStore {
 const defaultConfig: CoreConfig = {
   url: '',
   psk: '',
-  listenAddr: '127.0.0.1:1080',
-  httpProxyAddr: '127.0.0.1:1081',
-  maxPadding: 128,
+  listen_addr: '127.0.0.1:1080',
+  http_proxy_addr: '127.0.0.1:1081',
+  max_padding: 128,
   rotation: {
     enabled: true,
-    minIntervalMs: 5 * 60 * 1000,
-    maxIntervalMs: 10 * 60 * 1000,
-    preWarmMs: 10 * 1000,
+    min_interval_ms: 5 * 60 * 1000,
+    max_interval_ms: 10 * 60 * 1000,
+    pre_warm_ms: 10 * 1000,
   },
-  bypassCN: true,
-  blockAds: true,
+  bypass_cn: true,
+  block_ads: true,
 };
 
 let eventStream: EventStream | null = null;
