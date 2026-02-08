@@ -164,7 +164,8 @@ func (c *Core) Start(config SessionConfig) error {
 	log.Printf("[DEBUG] Transitioned to Starting, calling initialize")
 	// Initialize internal components
 	if err := c.initialize(); err != nil {
-		log.Printf("[DEBUG] Initialize failed: %v", err)
+		log.Printf("[DEBUG] Initialize failed: %v. Cleaning up...", err)
+		c.cleanup() // Ensure we don't leak listeners on partial failure
 		c.setLastError(err)
 		c.stateMachine.Transition(StateError)
 		return err
@@ -292,10 +293,11 @@ func (c *Core) emit(event Event) {
 func (c *Core) UpdateConfig(config SessionConfig) error {
 	c.mu.Lock()
 	
-	// Check if listen address changed while system proxy is enabled
-	oldAddr := ""
+	// Check if critical addresses changed
+	var oldListenAddr, oldHttpAddr string
 	if c.config != nil {
-		oldAddr = c.config.ListenAddr
+		oldListenAddr = c.config.ListenAddr
+		oldHttpAddr = c.config.HttpProxyAddr
 	}
 	
 	c.config = &config
@@ -318,7 +320,8 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 		c.UpdateRules(config.Rules)
 	}
 
-	needsProxyRefresh := c.systemProxyEnabled && oldAddr != config.ListenAddr
+	addressChanged := oldListenAddr != "" && (oldListenAddr != config.ListenAddr || oldHttpAddr != config.HttpProxyAddr)
+	needsProxyRefresh := c.systemProxyEnabled && oldListenAddr != config.ListenAddr
 	c.mu.Unlock()
 	
 	if needsProxyRefresh {
@@ -341,7 +344,12 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 		}
 		return nil
 	} else if currentState == StateActive {
-		// If already active, we might need to reconnect session
+		if addressChanged {
+			log.Printf("[INFO] Proxy addresses changed, restarting core...")
+			c.Close()
+			return c.Start(config)
+		}
+		// If only other params changed, just rotate session
 		if c.sessionMgr != nil {
 			go c.Rotate()
 		}
