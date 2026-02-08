@@ -228,9 +228,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen on TCP %s: %v", *listenAddr, err)
 	}
-	log.Printf("HTTP/1.1 (TCP) server listening on %s", tcpListener.Addr().String())
+	log.Printf("HTTP/1.1 (TCP+TLS) server listening on %s", tcpListener.Addr().String())
 
-	if err := httpServer.Serve(tcpListener); err != nil {
+	// Enable TLS on TCP listener using the same config
+	tlsListener := tls.NewListener(tcpListener, tlsConfig)
+
+	if err := httpServer.Serve(tlsListener); err != nil {
 		log.Fatalf("TCP server failed: %v", err)
 	}
 }
