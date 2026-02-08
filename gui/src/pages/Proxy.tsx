@@ -12,6 +12,8 @@ import {
 } from '@mui/material';
 import { Speed as SpeedIcon } from '@mui/icons-material';
 import { useState } from 'react';
+import { useCoreStore } from '@/store/coreStore';
+import { translations } from '@/lib/i18n';
 
 interface Node {
   id: string;
@@ -22,6 +24,8 @@ interface Node {
 }
 
 export default function Proxy() {
+  const { language } = useCoreStore();
+  const t = translations[language];
   const [nodes] = useState<Node[]>([]);
 
   const [selectedNode, setSelectedNode] = useState('1');
@@ -37,10 +41,10 @@ export default function Proxy() {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          代理节点
+          {t.proxy.title}
         </Typography>
         <Button variant="outlined" startIcon={<SpeedIcon />}>
-          测速
+          {t.proxy.btn_speedtest}
         </Button>
       </Box>
 

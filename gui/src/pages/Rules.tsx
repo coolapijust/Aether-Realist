@@ -15,11 +15,21 @@ import {
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { useCoreStore } from '@/store/coreStore';
+import { translations } from '@/lib/i18n';
 import type { Rule } from '@/types/core';
 
 export default function Rules() {
   const [activeTab, setActiveTab] = useState(0);
-  const { editingConfig, hasUnsavedChanges, updateEditingConfig, applyConfig, fetchConfig } = useCoreStore();
+  const {
+    language,
+    editingConfig,
+    hasUnsavedChanges,
+    updateEditingConfig,
+    applyConfig,
+    fetchConfig
+  } = useCoreStore();
+
+  const t = translations[language];
 
   useEffect(() => {
     fetchConfig();
@@ -32,7 +42,7 @@ export default function Rules() {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        规则配置
+        {t.rules.title}
       </Typography>
 
       <Card>
@@ -41,9 +51,9 @@ export default function Rules() {
           onChange={(_, v) => setActiveTab(v)}
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="分流规则" />
-          <Tab label="会话设置" />
-          <Tab label="高级选项" />
+          <Tab label={t.rules.tab_splitting} />
+          <Tab label={t.rules.tab_session} />
+          <Tab label={t.rules.tab_advanced} />
         </Tabs>
 
         <CardContent>
@@ -56,7 +66,7 @@ export default function Rules() {
                     onChange={(e) => updateEditingConfig({ bypass_cn: e.target.checked })}
                   />
                 }
-                label="国内网站直连"
+                label={t.rules.label_bypass_cn}
               />
 
               <FormControlLabel
@@ -66,13 +76,13 @@ export default function Rules() {
                     onChange={(e) => updateEditingConfig({ block_ads: e.target.checked })}
                   />
                 }
-                label="拦截广告"
+                label={t.rules.label_block_ads}
               />
 
               <Divider />
 
               <Typography variant="subtitle2" color="text.secondary">
-                自定义规则 (格式: 类型,值,操作)
+                {t.rules.subtitle_custom}
               </Typography>
               <TextField
                 multiline
@@ -114,12 +124,12 @@ export default function Rules() {
                     }
                   />
                 }
-                label="启用会话自动轮换"
+                label={t.rules.label_rotation}
               />
 
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
-                  label="最短间隔 (分钟)"
+                  label={t.rules.label_min_interval}
                   type="number"
                   value={editingConfig.rotation.min_interval_ms / 60 / 1000}
                   onChange={(e) =>
@@ -133,7 +143,7 @@ export default function Rules() {
                   sx={{ flex: 1 }}
                 />
                 <TextField
-                  label="最长间隔 (分钟)"
+                  label={t.rules.label_max_interval}
                   type="number"
                   value={editingConfig.rotation.max_interval_ms / 60 / 1000}
                   onChange={(e) =>
@@ -149,7 +159,7 @@ export default function Rules() {
               </Box>
 
               <TextField
-                label="预热时间 (秒)"
+                label={t.rules.label_prewarm}
                 type="number"
                 value={editingConfig.rotation.pre_warm_ms / 1000}
                 onChange={(e) =>
@@ -160,7 +170,7 @@ export default function Rules() {
                     }
                   })
                 }
-                helperText="新会话提前建立的时间"
+                helperText={t.rules.helper_prewarm}
                 sx={{ maxWidth: 200 }}
               />
             </Box>
@@ -169,14 +179,14 @@ export default function Rules() {
           {activeTab === 2 && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <TextField
-                label="服务器 URL"
+                label={t.rules.label_server_url}
                 value={editingConfig.url}
                 onChange={(e) => updateEditingConfig({ url: e.target.value })}
                 fullWidth
               />
 
               <TextField
-                label="PSK (预共享密钥)"
+                label={t.rules.label_psk}
                 type="password"
                 value={editingConfig.psk}
                 onChange={(e) => updateEditingConfig({ psk: e.target.value })}
@@ -184,21 +194,21 @@ export default function Rules() {
               />
 
               <TextField
-                label="SOCKS5 监听地址"
+                label={t.rules.label_socks_port}
                 value={editingConfig.listen_addr}
                 onChange={(e) => updateEditingConfig({ listen_addr: e.target.value })}
                 fullWidth
               />
 
               <TextField
-                label="HTTP 监听地址"
+                label={t.rules.label_http_port}
                 value={editingConfig.http_proxy_addr}
                 onChange={(e) => updateEditingConfig({ http_proxy_addr: e.target.value })}
                 fullWidth
               />
 
               <TextField
-                label="最大填充 (bytes)"
+                label={t.rules.label_padding}
                 value={editingConfig.max_padding}
                 onChange={(e) => updateEditingConfig({ max_padding: parseInt(e.target.value) })}
                 sx={{ maxWidth: 200 }}
@@ -211,7 +221,7 @@ export default function Rules() {
                     onChange={(e) => updateEditingConfig({ allow_insecure: e.target.checked })}
                   />
                 }
-                label="允许不安全连接 (跳过证书验证)"
+                label={t.rules.label_insecure}
               />
             </Box>
           )}
@@ -227,11 +237,11 @@ export default function Rules() {
                   startIcon={<SaveIcon />}
                   onClick={handleSave}
                 >
-                  保存
+                  {t.rules.btn_save}
                 </Button>
               }
             >
-              配置已修改，记得保存
+              {t.rules.alert_unsaved}
             </Alert>
           )}
         </CardContent>

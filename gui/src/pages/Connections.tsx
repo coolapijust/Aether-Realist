@@ -14,10 +14,12 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useCoreStore } from '@/store/coreStore';
+import { translations } from '@/lib/i18n';
 import { formatBytes, formatDuration } from '@/utils/format';
 
 export default function Connections() {
-  const { streams, closeStream } = useCoreStore();
+  const { streams, closeStream, language } = useCoreStore();
+  const t = translations[language];
 
   const getStateColor = (state: string) => {
     switch (state) {
@@ -33,7 +35,7 @@ export default function Connections() {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        活动连接
+        {t.connections.title}
       </Typography>
 
       <Card>
@@ -42,12 +44,12 @@ export default function Connections() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>目标地址</TableCell>
-                  <TableCell>状态</TableCell>
-                  <TableCell>上传</TableCell>
-                  <TableCell>下载</TableCell>
-                  <TableCell>时长</TableCell>
-                  <TableCell>操作</TableCell>
+                  <TableCell>{t.connections.col_target}</TableCell>
+                  <TableCell>{t.connections.col_status}</TableCell>
+                  <TableCell>{t.connections.col_upload}</TableCell>
+                  <TableCell>{t.connections.col_download}</TableCell>
+                  <TableCell>{t.connections.col_duration}</TableCell>
+                  <TableCell>{t.connections.col_action}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -55,7 +57,7 @@ export default function Connections() {
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
-                        暂无活动连接
+                        {t.connections.empty_placeholder}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -72,7 +74,7 @@ export default function Connections() {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={stream.state === 'active' ? '活跃' : '连接中'}
+                          label={stream.state === 'active' ? t.connections.status_active : t.connections.status_opening}
                           color={getStateColor(stream.state) as any}
                           size="small"
                         />

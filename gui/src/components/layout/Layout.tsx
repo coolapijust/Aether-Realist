@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useCoreStore } from '@/store/coreStore';
+import { translations } from '@/lib/i18n';
 import { appWindow } from '@tauri-apps/api/window';
 
 const drawerWidth = 240;
@@ -40,15 +41,6 @@ interface LayoutProps {
   onToggleDarkMode: () => void;
 }
 
-const menuItems = [
-  { id: 'dashboard', label: '首页', icon: HomeIcon },
-  { id: 'proxy', label: '代理', icon: ProxyIcon },
-  { id: 'rules', label: '规则', icon: RulesIcon },
-  { id: 'connections', label: '连接', icon: ConnectionsIcon },
-  { id: 'logs', label: '日志', icon: LogsIcon },
-  { id: 'settings', label: '设置', icon: SettingsIcon },
-];
-
 export default function Layout({
   children,
   currentPage,
@@ -57,7 +49,17 @@ export default function Layout({
   onToggleDarkMode,
 }: LayoutProps) {
   const theme = useTheme();
-  const { connectionState, connect, disconnect } = useCoreStore();
+  const { connectionState, connect, disconnect, language } = useCoreStore();
+  const t = translations[language];
+
+  const menuItems = [
+    { id: 'dashboard', label: t.nav.dashboard, icon: HomeIcon },
+    { id: 'proxy', label: '代理', icon: ProxyIcon }, // TODO: Add to i18n
+    { id: 'rules', label: '规则', icon: RulesIcon }, // TODO: Add to i18n
+    { id: 'connections', label: '连接', icon: ConnectionsIcon }, // TODO: Add to i18n
+    { id: 'logs', label: t.nav.logs, icon: LogsIcon },
+    { id: 'settings', label: t.nav.settings, icon: SettingsIcon },
+  ];
 
   useEffect(() => {
     // Auto-connect on mount

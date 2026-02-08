@@ -13,34 +13,39 @@ import {
   Divider,
   Button,
 } from '@mui/material';
+import { useCoreStore } from '@/store/coreStore';
+import { translations } from '@/lib/i18n';
+
 export default function Settings() {
+  const { language } = useCoreStore();
+  const t = translations[language];
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        设置
+        {t.settings.title}
       </Typography>
 
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            核心连接
+            {t.settings.group_core}
           </Typography>
-          
+
           <TextField
-            label="Core API 地址"
+            label={t.settings.label_api_addr}
             defaultValue="http://localhost:9880"
             fullWidth
             sx={{ mb: 2 }}
           />
-          
+
           <FormControlLabel
             control={<Switch defaultChecked />}
-            label="自动重连"
+            label={t.settings.label_auto_reconnect}
           />
-          
+
           <TextField
-            label="重连间隔 (秒)"
+            label={t.settings.label_reconnect_interval}
             type="number"
             defaultValue={5}
             sx={{ ml: 2, width: 120 }}
@@ -49,34 +54,34 @@ export default function Settings() {
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="h6" gutterBottom>
-            外观
+            {t.settings.group_ui}
           </Typography>
-          
+
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>主题</InputLabel>
-            <Select defaultValue="system" label="主题">
-              <MenuItem value="light">浅色</MenuItem>
-              <MenuItem value="dark">深色</MenuItem>
-              <MenuItem value="system">跟随系统</MenuItem>
+            <InputLabel>{t.settings.label_theme}</InputLabel>
+            <Select defaultValue="system" label={t.settings.label_theme}>
+              <MenuItem value="light">{t.settings.theme_light}</MenuItem>
+              <MenuItem value="dark">{t.settings.theme_dark}</MenuItem>
+              <MenuItem value="system">{t.settings.theme_system}</MenuItem>
             </Select>
           </FormControl>
-          
+
           <FormControlLabel
             control={<Switch defaultChecked />}
-            label="启动时自动连接"
+            label={t.settings.label_auto_connect}
           />
-          
+
           <FormControlLabel
             control={<Switch defaultChecked />}
-            label="最小化到系统托盘"
+            label={t.settings.label_minimize}
           />
 
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="h6" gutterBottom>
-            关于
+            {t.settings.group_about}
           </Typography>
-          
+
           <Typography variant="body2" color="text.secondary">
             Aether-Realist GUI v0.1.0
           </Typography>
@@ -89,7 +94,7 @@ export default function Settings() {
 
           <Box sx={{ mt: 3 }}>
             <Button variant="outlined" color="error">
-              重置所有设置
+              {t.settings.btn_reset}
             </Button>
           </Box>
         </CardContent>

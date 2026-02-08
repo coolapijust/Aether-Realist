@@ -159,7 +159,7 @@ export default function Dashboard() {
               transition: 'all 0.2s'
             }}
           >
-            {systemProxyEnabled ? (language === 'zh' ? '断开代理' : 'Disconnect Proxy') : (language === 'zh' ? '开启系统代理' : 'Enable System Proxy')}
+            {systemProxyEnabled ? t.dashboard.btn_disconnect_proxy : t.dashboard.btn_enable_system_proxy}
           </Button>
         </Box>
       </Box>
