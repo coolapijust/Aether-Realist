@@ -161,7 +161,7 @@ func (c *Core) Start(config SessionConfig) error {
 		return err
 	}
 	
-	fmt.Printf("[TRACE] Transitioned to Starting, calling initialize\n")
+	log.Printf("[DEBUG] Transitioned to Starting, calling initialize")
 	// Initialize internal components
 	if err := c.initialize(); err != nil {
 		log.Printf("[DEBUG] Initialize failed: %v", err)
