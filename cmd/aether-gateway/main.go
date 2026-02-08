@@ -19,7 +19,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"aether-rea/internal/core"
@@ -96,25 +99,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Try to load TLS certs, fallback to self-signed
-	var certs tls.Certificate
-	var certErr error
-
-	if *certFile != "" && *keyFile != "" {
-		certs, certErr = tls.LoadX509KeyPair(*certFile, *keyFile)
-	}
-
-	if certErr != nil || (*certFile == "" && *keyFile == "") {
-		log.Printf("No TLS certificates provided or failed to load. Generating self-signed certificate for testing...")
-		certs, certErr = generateSelfSignedCert(domainEnv)
-		if certErr != nil {
-			log.Fatalf("Failed to generate self-signed cert: %v", certErr)
+	// Initialize Certificate Loader for hot-reloading
+	certLoader, err := NewCertificateLoader(*certFile, *keyFile)
+	if err != nil {
+		// Fallback to self-signed if loading failed (only if files are missing/invalid at startup)
+		if *certFile == "" && *keyFile == "" {
+			log.Printf("No TLS certificates provided. Generating self-signed certificate...")
+			certs, err := generateSelfSignedCert(domainEnv)
+			if err != nil {
+				log.Fatalf("Failed to generate self-signed cert: %v", err)
+			}
+			// Create a dummy loader with static cert
+			certLoader = &CertificateLoader{cert: &certs}
+		} else {
+			// If user provided files but they failed to load, we should probably warn and fallback or exit
+			// But for now let's just log error and maybe generate self-signed? 
+			// Actually better to fail if files were specified but invalid
+			log.Printf("Warning: Failed to load specified certificates: %v. Generating temporary self-signed...", err)
+			certs, err := generateSelfSignedCert(domainEnv)
+			if err != nil {
+				log.Fatalf("Failed to generate self-signed cert: %v", err)
+			}
+			certLoader = &CertificateLoader{cert: &certs, certFile: *certFile, keyFile: *keyFile}
 		}
+	} else {
+		log.Printf("TLS certificates loaded successfully from %s", *certFile)
 	}
 
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{certs},
-		NextProtos:   []string{http3.NextProtoH3},
+		GetCertificate: certLoader.GetCertificate,
+		NextProtos:     []string{http3.NextProtoH3},
 	}
 
 	var tracer func(context.Context, logging.Perspective, quic.ConnectionID) *logging.ConnectionTracer
@@ -417,4 +431,62 @@ func generateSelfSignedCert(domain string) (tls.Certificate, error) {
 	pem.Encode(keyBuf, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
 	return tls.X509KeyPair(certBuf.Bytes(), keyBuf.Bytes())
+}
+
+// CertificateLoader handles dynamic reloading of TLS certificates via signal
+type CertificateLoader struct {
+	certFile string
+	keyFile  string
+	cert     *tls.Certificate
+	mu       sync.RWMutex
+}
+
+func NewCertificateLoader(certFile, keyFile string) (*CertificateLoader, error) {
+	loader := &CertificateLoader{
+		certFile: certFile,
+		keyFile:  keyFile,
+	}
+	// Initial load
+	if err := loader.forceReload(); err != nil {
+		return nil, err
+	}
+	
+	// Start signal listener
+	go loader.listenForSignal()
+	
+	return loader, nil
+}
+
+func (l *CertificateLoader) listenForSignal() {
+	// Listen for SIGHUP (standard reload signal)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP)
+
+	go func() {
+		for range c {
+			log.Println("[INFO] Received SIGHUP, reloading TLS certificates...")
+			if err := l.forceReload(); err != nil {
+				log.Printf("[ERROR] Failed to reload certificate on signal: %v", err)
+			}
+		}
+	}()
+}
+
+func (l *CertificateLoader) forceReload() error {
+	kp, err := tls.LoadX509KeyPair(l.certFile, l.keyFile)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	l.cert = &kp
+	l.mu.Unlock()
+	log.Printf("[INFO] Reloaded TLS certificate from %s", l.certFile)
+	return nil
+}
+
+// GetCertificate implements tls.Config.GetCertificate
+func (l *CertificateLoader) GetCertificate(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.cert, nil
 }
