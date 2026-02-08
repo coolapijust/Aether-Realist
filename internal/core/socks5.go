@@ -65,6 +65,7 @@ func (s *socks5Server) start() error {
 			}
 			
 			log.Printf("[SOCKS5] %s -> %s (action=%s, rule=%s)", host, addr, action, ruleID)
+			s.core.emit(NewCoreErrorEvent("socks5.info", fmt.Sprintf("Proxying to %s:%d (%s)", host, port, action), false))
 
 			switch action {
 			case ActionDirect:
@@ -77,11 +78,14 @@ func (s *socks5Server) start() error {
 				fallthrough
 			default:
 				// Open stream through Core
+				log.Printf("[SOCKS5] Opening stream to %s:%d", target.Host, target.Port)
 				handle, err := s.core.OpenStream(target, nil)
 				if err != nil {
+					log.Printf("[SOCKS5] OpenStream failed: %v", err)
 					s.core.emit(NewCoreErrorEvent(ErrTargetConnect, err.Error(), false))
 					return nil, err
 				}
+				log.Printf("[SOCKS5] Stream opened: %s", handle.ID)
 				
 				return &streamConn{
 					handle:  handle,

@@ -63,6 +63,7 @@ func BuildMetadataRecord(host string, port uint16, maxPadding uint16, psk string
 
 	header := make([]byte, RecordHeaderLength)
 	header[0] = TypeMetadata
+	
 	// Use final ciphertext length for AAD consistency
 	ciphertextLen := len(plaintext) + 16
 	binary.BigEndian.PutUint32(header[4:8], uint32(ciphertextLen))
@@ -214,6 +215,27 @@ func DecryptMetadata(record *Record, psk string, streamID uint64) (*Metadata, er
 	return ParseMetadata(plaintext)
 }
 
+// ... (ParseMetadata and parseOptions remain same) ...
+
+// BuildErrorRecord creates an error record
+func BuildErrorRecord(code uint16, message string) ([]byte, error) {
+	messageBytes := []byte(message)
+	payload := make([]byte, 4+len(messageBytes))
+	binary.BigEndian.PutUint16(payload[0:2], code)
+	copy(payload[4:], messageBytes)
+
+	// Error records have 0 padding
+	// Header: Type(1) + PayloadLen(4) + PaddingLen(4) + IV(12)
+	header := make([]byte, RecordHeaderLength)
+	header[0] = TypeError
+	binary.BigEndian.PutUint32(header[4:8], uint32(len(payload)))
+	binary.BigEndian.PutUint32(header[8:12], 0)
+	
+	// IV is zero for error records
+	
+	return buildRecord(header, payload, nil), nil
+}
+
 // ParseMetadata parses the decrypted metadata payload
 func ParseMetadata(buffer []byte) (*Metadata, error) {
 	if len(buffer) < 3 {
@@ -299,26 +321,15 @@ func BuildErrorRecord(code uint16, message string) ([]byte, error) {
 	copy(payload[4:], messageBytes)
 
 	// Error records have 0 padding
-	// Header: Type(1) + PayloadLen(4) + PaddingLen(4) + IV(12)
+	// Header: Type(1) + Reserved(3) + StreamID(8) + PayloadLen(4) + PaddingLen(4) + IV(12)
 	header := make([]byte, RecordHeaderLength)
 	header[0] = TypeError
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(payload)))
-	binary.BigEndian.PutUint32(header[8:12], 0)
-	// IV is zero for error records in worker.js implementation or random? 
-	// Worker js: generic build logic uses random IV, but writeError uses explicit zero IV in parts? 
-	// Wait, worker.js writeError:
-	// Record byte 0-4: length
-	// byte 4: TYPE_ERROR
-	// ...
-	// iv = new Uint8Array(12); // zeroes
-	// record.set(iv, 16); 
+	// StreamID is 0 for error records (unauthenticated)
 	
-	// Our buildRecord handles header assembly, but assumes we pass a header with IV already set?
-	// The protocol seems to say IV is part of header. 
-	// Let's manually build it to match worker.js strictness if needed.
+	binary.BigEndian.PutUint32(header[12:16], uint32(len(payload)))
+	binary.BigEndian.PutUint32(header[16:20], 0)
 	
-	iv := make([]byte, 12) // Zero IV
-	copy(header[12:24], iv)
+	// IV is zero for error records
 	
 	return buildRecord(header, payload, nil), nil
 }
