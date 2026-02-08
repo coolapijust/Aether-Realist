@@ -223,8 +223,14 @@ func main() {
 		}),
 	}
 
-	log.Printf("Starting HTTP/1.1 (TCP) server on %s (Health Check Ready)", *listenAddr)
-	if err := httpServer.ListenAndServe(); err != nil {
+	// Create a TCP listener explicitly to get the actual bound port
+	tcpListener, err := net.Listen("tcp", *listenAddr)
+	if err != nil {
+		log.Fatalf("Failed to listen on TCP %s: %v", *listenAddr, err)
+	}
+	log.Printf("HTTP/1.1 (TCP) server listening on %s", tcpListener.Addr().String())
+
+	if err := httpServer.Serve(tcpListener); err != nil {
 		log.Fatalf("TCP server failed: %v", err)
 	}
 }
