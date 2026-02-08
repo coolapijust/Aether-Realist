@@ -599,7 +599,7 @@ func (c *Core) openStreamInternal(target TargetAddress, options map[string]inter
 
 	stream, err := session.OpenStreamSync(c.ctx)
 	if err != nil {
-		log.Printf("[DEBUG] Open stream sync to %s:%d failed: %v", target.Host, target.Port, err)
+		log.Printf("[DEBUG] Open stream sync to %s:%d failed: %+v (err type: %T)", target.Host, target.Port, err, err)
 		return StreamHandle{}, err
 	}
 

@@ -34,8 +34,8 @@ func EnableProxy(address string, isHttp bool) error {
 	
 	proxyServer := ""
 	if isHttp {
-		// For Windows 11, setting http and https separately is more reliable
-		proxyServer = fmt.Sprintf("http=%s:%s;https=%s:%s", host, port, host, port)
+		// Simplified format: host:port (Use same proxy for all protocols)
+		proxyServer = fmt.Sprintf("%s:%s", host, port)
 	} else {
 		proxyServer = fmt.Sprintf("socks=%s:%s", host, port)
 	}

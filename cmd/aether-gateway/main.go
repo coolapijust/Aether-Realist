@@ -148,6 +148,7 @@ func main() {
 
 	quicConfig := &quic.Config{
 		EnableDatagrams: true,
+		MaxIdleTimeout:  60 * time.Second,
 		Tracer:          tracer,
 	}
 
