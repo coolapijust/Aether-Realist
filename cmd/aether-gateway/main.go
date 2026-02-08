@@ -117,10 +117,10 @@ func main() {
 		NextProtos:   []string{http3.NextProtoH3},
 	}
 
-	var tracer func(context.Context, quic.LoggingPerspective, quic.ConnectionID) *logging.ConnectionTracer
+	var tracer func(context.Context, logging.Perspective, quic.ConnectionID) *logging.ConnectionTracer
 	if os.Getenv("QLOG") == "1" {
 		log.Println("Config: QLOG tracing enabled")
-		tracer = func(ctx context.Context, p quic.LoggingPerspective, connID quic.ConnectionID) *logging.ConnectionTracer {
+		tracer = func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
 			filename := fmt.Sprintf("server_%x.qlog", connID)
 			f, err := os.Create(filename)
 			if err != nil {
