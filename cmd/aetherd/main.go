@@ -112,6 +112,12 @@ func main() {
 		}
 	}
 
+	// Enforce default HTTP proxy address if still empty (critical for system proxy on Windows)
+	if config.HttpProxyAddr == "" {
+		config.HttpProxyAddr = "127.0.0.1:1081"
+		log.Printf("Warning: HTTP proxy address not set, defaulting to %s", config.HttpProxyAddr)
+	}
+
 	// Start Core with config
 	if err := c.Start(config); err != nil {
 		log.Printf("Failed to start core: %v", err)

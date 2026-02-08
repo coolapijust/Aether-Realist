@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -18,7 +18,11 @@ import { useCoreStore } from '@/store/coreStore';
 
 export default function Rules() {
   const [activeTab, setActiveTab] = useState(0);
-  const { editingConfig, hasUnsavedChanges, updateEditingConfig, applyConfig } = useCoreStore();
+  const { editingConfig, hasUnsavedChanges, updateEditingConfig, applyConfig, fetchConfig } = useCoreStore();
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const handleSave = async () => {
     await applyConfig();

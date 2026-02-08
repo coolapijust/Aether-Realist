@@ -423,19 +423,17 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 			return fmt.Errorf("no config loaded")
 		}
 		
-		// Prioritize HTTP proxy for system proxy (better compatibility)
+	if enabled {
+		if c.config == nil {
+			return fmt.Errorf("no config loaded")
+		}
+		
+		// Only use HTTP proxy for system proxy to ensure compatibility
 		addr := c.config.HttpProxyAddr
 		isHttp := true
 		
-		// Fallback to SOCKS5 if HTTP proxy is not configured or disabled
 		if addr == "" {
-			addr = c.config.ListenAddr
-			isHttp = false
-			fmt.Printf("[WARN] System proxy falling back to SOCKS5 (not recommended for Win11/UWP)\n")
-		}
-		
-		if addr == "" {
-			return fmt.Errorf("no proxy address configured")
+			return fmt.Errorf("system proxy requires http proxy to be configured")
 		}
 		
 		fmt.Printf("[TRACE] Enabling system proxy: %s (http=%v)\n", addr, isHttp)
@@ -490,6 +488,12 @@ func (c *Core) initialize() error {
 	fmt.Printf("[TRACE] Metrics started\n")
 
 	c.ruleEngine = NewRuleEngine(ActionProxy) // Default to proxy
+	
+	// Defensive: Ensure HttpProxyAddr is set if system proxy is to be enabled via HTTP
+	if c.config.HttpProxyAddr == "" {
+		// Log warning?
+		c.config.HttpProxyAddr = "127.0.0.1:1081"
+	}
 	
 	// Add default rules if enabled
 	if c.config.BlockAds {
