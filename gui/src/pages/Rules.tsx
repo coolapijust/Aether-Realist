@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { useCoreStore } from '@/store/coreStore';
+import type { Rule } from '@/types/core';
 
 export default function Rules() {
   const [activeTab, setActiveTab] = useState(0);
@@ -71,13 +72,31 @@ export default function Rules() {
               <Divider />
 
               <Typography variant="subtitle2" color="text.secondary">
-                自定义规则 (Geo/Domain/IP)
+                自定义规则 (格式: 类型,值,操作)
               </Typography>
               <TextField
                 multiline
                 rows={6}
-                placeholder="DOMAIN-SUFFIX,google.com,Proxy\nGEOIP,CN,Direct\n..."
+                placeholder="DOMAIN_SUFFIX,google.com,proxy&#10;GEOIP,CN,direct&#10;DOMAIN_KEYWORD,ads,block"
                 fullWidth
+                value={(editingConfig.rules || [])
+                  .map(r => `${r.matches[0].type},${r.matches[0].value},${r.action}`)
+                  .join('\n')}
+                onChange={(e) => {
+                  const lines = e.target.value.split('\n').filter(l => l.trim() !== '');
+                  const newRules: Rule[] = lines.map((l, i) => {
+                    const [type, value, action] = l.split(',').map(s => s.trim().toLowerCase());
+                    return {
+                      id: `custom-${i}`,
+                      name: `Custom Rule ${i}`,
+                      priority: 100 - i,
+                      enabled: true,
+                      action: action as any,
+                      matches: [{ type: type as any, value }]
+                    };
+                  }).filter(r => ['proxy', 'direct', 'block', 'reject'].includes(r.action));
+                  updateEditingConfig({ rules: newRules });
+                }}
               />
             </Box>
           )}

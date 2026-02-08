@@ -25,8 +25,7 @@ type SessionConfig struct {
 	BypassCN       bool           `json:"bypass_cn,omitempty"`   // Bypass China sites
 	BlockAds       bool           `json:"block_ads,omitempty"`   // Block advertisement
 	
-	// Deprecated: Use Rotation.Enabled = false instead
-	RotateInterval int `json:"rotate_interval,omitempty"` 
+	Rules []*Rule `json:"rules,omitempty"` // Custom routing rules
 }
 
 // TargetAddress represents a destination host:port.
@@ -132,10 +131,15 @@ func (c *Core) processEvents() {
 			return
 		case event := <-c.eventBus:
 			c.handlersMu.RLock()
+			handlers := make([]EventHandler, 0, len(c.handlers))
 			for _, h := range c.handlers {
-				h(event)
+				handlers = append(handlers, h)
 			}
 			c.handlersMu.RUnlock()
+			
+			for _, h := range handlers {
+				go h(event) // Async dispatch to prevent blocking
+			}
 		}
 	}
 }
@@ -143,7 +147,7 @@ func (c *Core) processEvents() {
 // Start transitions from Idle -> Starting -> Active.
 // Returns when session is established or error occurs.
 func (c *Core) Start(config SessionConfig) error {
-	fmt.Printf("[TRACE] Core.Start called\n")
+	log.Printf("[DEBUG] Core.Start called")
 	if !c.stateMachine.CanTransition(StateStarting) {
 		return fmt.Errorf("cannot start from state %s", c.stateMachine.State())
 	}
@@ -159,13 +163,13 @@ func (c *Core) Start(config SessionConfig) error {
 	fmt.Printf("[TRACE] Transitioned to Starting, calling initialize\n")
 	// Initialize internal components
 	if err := c.initialize(); err != nil {
-		fmt.Printf("[TRACE] Initialize failed: %v\n", err)
+		log.Printf("[DEBUG] Initialize failed: %v", err)
 		c.setLastError(err)
 		c.stateMachine.Transition(StateError)
 		return err
 	}
 	
-	fmt.Printf("[TRACE] Initialize success, transitioning to Active\n")
+	log.Printf("[DEBUG] Initialize success, transitioning to Active")
 	c.setLastError(nil)
 	return c.stateMachine.Transition(StateActive)
 }
@@ -308,6 +312,11 @@ func (c *Core) UpdateConfig(config SessionConfig) error {
 		c.sessionMgr.updateConfig(&config)
 	}
 
+	// Update rules from config if they exist
+	if len(config.Rules) > 0 {
+		c.UpdateRules(config.Rules)
+	}
+
 	needsProxyRefresh := c.systemProxyEnabled && oldAddr != config.ListenAddr
 	c.mu.Unlock()
 	
@@ -398,11 +407,7 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	level := "info"
 	lowerMsg := strings.ToLower(msg)
 	
-	// Skip noisy metrics logs if they accidentally end up here
-	if strings.Contains(lowerMsg, "metrics.snapshot") || strings.Contains(lowerMsg, "metricshistory") {
-		return len(p), nil
-	}
-
+	// Filter logic is now handled globally by FilteredWriter in main.go
 	if strings.Contains(lowerMsg, "error") || strings.Contains(lowerMsg, "failed") {
 		level = "error"
 	} else if strings.Contains(lowerMsg, "warn") {
@@ -432,7 +437,7 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 			return fmt.Errorf("system proxy requires http proxy to be configured")
 		}
 		
-		fmt.Printf("[TRACE] Enabling system proxy: %s (http=%v)\n", addr, isHttp)
+		log.Printf("[DEBUG] Enabling system proxy: %s (http=%v)", addr, isHttp)
 		if err := systemproxy.EnableProxy(addr, isHttp); err != nil {
 			return err
 		}
@@ -450,38 +455,17 @@ func (c *Core) SetSystemProxy(enabled bool) error {
 	return nil
 }
 
-// runEventLoop processes events and dispatches to handlers.
-func (c *Core) runEventLoop() {
-	for {
-		select {
-		case event := <-c.eventBus:
-			c.handlersMu.RLock()
-			handlers := make([]EventHandler, 0, len(c.handlers))
-			for _, h := range c.handlers {
-				handlers = append(handlers, h)
-			}
-			c.handlersMu.RUnlock()
-			
-			for _, h := range handlers {
-				go h(event) // Async dispatch to prevent blocking
-			}
-			
-		case <-c.ctx.Done():
-			return
-		}
-	}
-}
 
 // initialize sets up internal components.
 func (c *Core) initialize() error {
-	fmt.Printf("[TRACE] initialize entered\n")
+	log.Printf("[DEBUG] initialize entered")
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.metrics = NewMetrics() // Use constructor!
 	c.metricsCollector = NewMetricsCollector(c.metrics, 1*time.Second, c.emit)
 	c.metricsCollector.Start()
-	fmt.Printf("[TRACE] Metrics started\n")
+	log.Printf("[DEBUG] Metrics started")
 
 	c.ruleEngine = NewRuleEngine(ActionProxy) // Default to proxy
 	
@@ -493,7 +477,7 @@ func (c *Core) initialize() error {
 	
 	// Add default rules if enabled
 	if c.config.BlockAds {
-		fmt.Printf("[TRACE] Adding default ads rules\n")
+		log.Printf("[DEBUG] Adding default ads rules")
 		c.ruleEngine.AddRule(&Rule{
 			ID:       "default-block-ads",
 			Name:     "Block Ads",
@@ -507,7 +491,7 @@ func (c *Core) initialize() error {
 	}
 	
 	if c.config.BypassCN {
-		fmt.Printf("[TRACE] Adding default bypass-cn rules\n")
+		log.Printf("[DEBUG] Adding default bypass-cn rules")
 		c.ruleEngine.AddRule(&Rule{
 			ID:       "default-bypass-cn",
 			Name:     "Bypass China",
@@ -530,16 +514,13 @@ func (c *Core) initialize() error {
 		})
 	}
 
-	fmt.Printf("[TRACE] Initializing session manager\n")
+	log.Printf("[DEBUG] Initializing session manager")
 	c.sessionMgr = newSessionManager(c.config, c.emit, c.metrics)
 	if err := c.sessionMgr.initialize(); err != nil {
 		return err
 	}
-	if err := c.sessionMgr.connect(); err != nil {
-		return err
-	}
 
-	fmt.Printf("[TRACE] Starting SOCKS5 server on %s\n", c.config.ListenAddr)
+	log.Printf("[DEBUG] Starting SOCKS5 server on %s", c.config.ListenAddr)
 	c.socksServer = newSocks5Server(c.config.ListenAddr, c)
 	if c.socksServer != nil {
 		if err := c.socksServer.start(); err != nil {
@@ -548,13 +529,22 @@ func (c *Core) initialize() error {
 	}
 
 	if c.config.HttpProxyAddr != "" {
-		fmt.Printf("[TRACE] Starting HTTP proxy on %s\n", c.config.HttpProxyAddr)
+		log.Printf("[DEBUG] Starting HTTP proxy on %s", c.config.HttpProxyAddr)
 		c.httpProxyServer = newHttpProxyServer(c.config.HttpProxyAddr, c)
 		if err := c.httpProxyServer.Start(); err != nil {
 			return err
 		}
 	}
-	fmt.Printf("[TRACE] initialize finished\n")
+
+	// Connect to upstream (if configured)
+	if c.config.URL != "" {
+		log.Printf("[DEBUG] Connecting to upstream: %s", c.config.URL)
+		if err := c.sessionMgr.connect(); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("[DEBUG] initialize finished")
 	return nil
 }
 

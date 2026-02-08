@@ -137,6 +137,20 @@ export interface CoreConfig {
   };
   bypass_cn?: boolean;
   block_ads?: boolean;
+  rules?: Rule[];
+}
+
+export interface Rule {
+  id: string;
+  name: string;
+  priority: number;
+  enabled: boolean;
+  action: 'direct' | 'proxy' | 'block' | 'reject';
+  matches: {
+    type: string;
+    value: string;
+    not?: boolean;
+  }[];
 }
 
 export interface NodeInfo {

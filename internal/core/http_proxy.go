@@ -91,6 +91,8 @@ func (s *HttpProxyServer) handleConnect(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	log.Printf("[HTTP-CONNECT] %s -> %s (action=%s)", r.Host, target, action)
+
 	if action == ActionBlock || action == ActionReject {
 		http.Error(w, "Blocked by rule", http.StatusForbidden)
 		return
@@ -167,6 +169,8 @@ func (s *HttpProxyServer) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			action = res.Action
 		}
 	}
+
+	log.Printf("[HTTP] %s -> %s (action=%s)", r.URL.String(), target, action)
 
 	if action == ActionBlock || action == ActionReject {
 		http.Error(w, "Blocked by rule", http.StatusForbidden)

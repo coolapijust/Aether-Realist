@@ -52,7 +52,9 @@
         "bin/*"
       ],
       "shortDescription": "Aether Realist GUI",
-      "targets": "all",
+      "targets": [
+        "msi"
+      ],
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",

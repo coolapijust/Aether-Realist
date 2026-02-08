@@ -35,11 +35,12 @@ jobs:
           go mod download
           go build -ldflags="-s -w" -o gui/src-tauri/bin/aetherd.exe ./cmd/aetherd
 
-      # Build GUI
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: gui/package-lock.json
 
       - name: Install dependencies
         working-directory: gui
@@ -48,15 +49,28 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build GUI
-        working-directory: gui
-        run: npm run tauri:build
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "gui/src-tauri -> target"
 
-      # Upload artifact
-      - name: Upload
+      - name: Build GUI
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: gui
+          tagName: v__VERSION__ # 由 tauri-apps/tauri-action 自动处理或后续手动指定
+          releaseName: "Aether-Realist v__VERSION__"
+          releaseBody: "自动生成的发布版本"
+          releaseDraft: true
+          prerelease: false
+
+      # Note: tauri-apps/tauri-action handles upload, so we can skip manual upload if release is the goal.
+      # But if we need the artifact for intermediate use, we keep it.
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: aether-windows
           path: |
             gui/src-tauri/target/release/bundle/msi/*.msi
-            gui/src-tauri/target/release/bundle/nsis/*.exe

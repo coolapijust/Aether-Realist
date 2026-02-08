@@ -32,8 +32,16 @@ type ConfigManager struct {
 	mu         sync.Mutex
 }
 
-// NewConfigManager creates a new manager using the user config directory.
+// NewConfigManager creates a new manager. 
+// It checks the current directory first, then falls back to user config directory.
 func NewConfigManager() (*ConfigManager, error) {
+	// 1. Check current directory
+	localPath := ConfigFileName
+	if _, err := os.Stat(localPath); err == nil {
+		return &ConfigManager{configPath: localPath}, nil
+	}
+
+	// 2. Fallback to user config directory
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err

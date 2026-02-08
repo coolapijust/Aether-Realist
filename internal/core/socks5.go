@@ -64,6 +64,8 @@ func (s *socks5Server) start() error {
 				}
 			}
 			
+			log.Printf("[SOCKS5] %s -> %s (action=%s, rule=%s)", host, addr, action, ruleID)
+
 			switch action {
 			case ActionDirect:
 				return net.Dial(network, addr)

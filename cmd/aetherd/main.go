@@ -67,9 +67,16 @@ func main() {
 	c := core.New()
 
 	// Redirect logs to stdout, Core event stream, and optionally a file
-	logWriters := []io.Writer{os.Stdout, c.GetLogWriter()}
+	// Apply global filters for noise reduction
+	filters := []string{"metrics.snapshot", "metricshistory", "pong", "type\":\"pong\""}
+	
+	stdoutFiltered := util.NewFilteredWriter(os.Stdout, filters)
+	coreLogFiltered := util.NewFilteredWriter(c.GetLogWriter(), filters)
+	
+	logWriters := []io.Writer{stdoutFiltered, coreLogFiltered}
 	if debugLog != nil {
-		logWriters = append(logWriters, debugLog)
+		debugLogFiltered := util.NewFilteredWriter(debugLog, filters)
+		logWriters = append(logWriters, debugLogFiltered)
 	}
 	log.SetOutput(io.MultiWriter(logWriters...))
 	if debugLog != nil {
@@ -109,6 +116,8 @@ func main() {
 			if *httpAddr != "" {
 				config.HttpProxyAddr = *httpAddr
 			}
+		} else {
+			log.Printf("Warning: Failed to load configuration from %s: %v", cm.GetConfigPath(), err)
 		}
 	}
 
@@ -120,8 +129,8 @@ func main() {
 
 	// Start Core with config
 	if err := c.Start(config); err != nil {
-		log.Printf("Failed to start core: %v", err)
-		return
+		log.Printf("Warning: Initial core start failed: %v", err)
+		log.Printf("The API server will still start, allowing you to reconfigure via GUI.")
 	}
 
 	// Start HTTP API server

@@ -206,15 +206,15 @@ type RotationConfig struct {
 	
 	// MinIntervalMs is the minimum rotation interval in milliseconds
 	// Default: 900000 (15 minutes)
-	MinIntervalMs int `json:"minIntervalMs,omitempty"`
+	MinIntervalMs int `json:"min_interval_ms,omitempty"`
 	
 	// MaxIntervalMs is the maximum rotation interval in milliseconds
 	// Default: 2400000 (40 minutes)
-	MaxIntervalMs int `json:"maxIntervalMs,omitempty"`
+	MaxIntervalMs int `json:"max_interval_ms,omitempty"`
 	
 	// PreWarmMs is the pre-warm duration in milliseconds
 	// Default: 30000 (30 seconds)
-	PreWarmMs int `json:"preWarmMs,omitempty"`
+	PreWarmMs int `json:"pre_warm_ms,omitempty"`
 	
 	// Jitter adds randomness to prevent predictable patterns
 	// Default: true
