@@ -15,6 +15,16 @@
 - **承载层**：WebTransport over HTTP/3。
 - **无状态**：服务端仅在单个 WebTransport 会话范围内维护状态，关闭即释放。
 - **会话握手**：依赖 HTTP/3 + WebTransport 建立，不引入额外握手包。
+- **0-RTT 说明**：当前版本默认 **禁用 0-RTT** (Early Data)，以规避重放攻击与回退歧义。所有数据发送必须在 WebTransport 会话建立完成之后。
+
+## 2.1 握手状态机 (Handshake State Machine)
+
+为了消除实现歧义并防止互等死锁，双方必须严格遵循以下状态机流转：
+
+1.  **Client**: `OpenStream()` -> **立即发送** `Metadata Record` -> 等待 `Data Record` 或直接发送 `Data Record`。
+    *   *Client 不得等待 Server 的任何初始响应即可发送后续数据。*
+2.  **Server**: `AcceptStream()` -> **阻塞读取** `Metadata Record` -> 解析目标与路由 -> 建立连接/转发。
+    *   *Server 在收到完整 Metadata 前不得发送任何数据（包括 Error Record 以外的数据）。*
 
 ## 3. Record 帧结构
 
@@ -101,6 +111,10 @@ Metadata Record 的 Payload 必须使用 `AES-128-GCM` 加密。
   - 入站：WebTransport Data Record → Socket
   - 出站：Socket → WebTransport Data Record
 - 应使用流式写入确保背压生效（`readable.pipeTo(writable)` 或等价实现）。
+- **MTU 与分片 (Fragmentation)**：
+    - 本协议完全构建于 **QUIC Stream** 之上，不依赖 QUIC Datagram。
+    - **应用层分片**：Data Record 的 payload 大小（2KB-16KB）仅用于流量混淆，**与底层网络 MTU 无关**。QUIC 协议栈会自动负责将大 Record 切分为适合路径 MTU（PMTU）的 UDP 数据包并在接收端重组。
+    - **禁止**：实现者不得假设 "One Record = One UDP Packet"。
 - **流量混淆 (Traffic Chunking)**：
     - 发送端应将大数据流拆分为 **2KB - 16KB** 的随机大小片段。
     - 避免发送特征明显的 4KB/8KB 对齐数据包，以对抗 DPI 的大小分析。
