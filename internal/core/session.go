@@ -68,12 +68,14 @@ func (sm *sessionManager) initialize() error {
 	}
 
 	quicConfig := &quic.Config{
-		KeepAlivePeriod:      20 * time.Second,
-		MaxIdleTimeout:       60 * time.Second,
-		EnableDatagrams:      true,
-		MaxIncomingStreams:   1000,
-		MaxStreamReceiveWindow:     10 * 1024 * 1024, // 10 MB
-		MaxConnectionReceiveWindow: 15 * 1024 * 1024, // 15 MB
+		KeepAlivePeriod:            20 * time.Second,
+		MaxIdleTimeout:             60 * time.Second,
+		EnableDatagrams:            true,
+		MaxIncomingStreams:         1000,
+		InitialStreamReceiveWindow:     4 * 1024 * 1024, // 4 MB (Initial)
+		InitialConnectionReceiveWindow: 6 * 1024 * 1024, // 6 MB (Initial)
+		MaxStreamReceiveWindow:         32 * 1024 * 1024, // 32 MB (Max)
+		MaxConnectionReceiveWindow:     48 * 1024 * 1024, // 48 MB (Max)
 	}
 
 	sm.dialer = &webtransport.Dialer{

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -12,9 +13,10 @@ type RecordReader struct {
 	stash  []byte
 }
 
-// NewRecordReader creates a new record reader.
+// NewRecordReader creates a new record reader with a 1MB buffer.
 func NewRecordReader(reader io.Reader) *RecordReader {
-	return &RecordReader{reader: reader}
+	// Wrap in a large 1MB buffer to reduce syscall overhead
+	return &RecordReader{reader: bufio.NewReaderSize(reader, 1*1024*1024)}
 }
 
 // Read implements io.Reader, reassembling records into continuous data.
