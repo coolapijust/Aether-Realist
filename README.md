@@ -1,21 +1,22 @@
 # Aether-Realist
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-V3.0.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-V3.2.0-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/WebTransport-HTTP%2F3-orange.svg" alt="WebTransport">
 </p>
 
-Aether-Realist 是一套基于 **WebTransport (HTTP/3)** 协议的高性能、无状态、生产级边缘中转系统。它专为现代复杂网络环境设计，通过深度的协议混淆与主动探测防御技术，提供极致安全且稳定的隐蔽加密链路。
+Aether-Realist 是一套基于 **WebTransport (HTTP/3)** 协议的高性能、无状态、生产级边缘中转系统。它采用创新的 **“零同步”(Zero-Sync)** 加密架构，彻底消除了高并发下的握手失败与解密报错，提供极致安全且稳定的隐蔽加密链路。
 
 ---
 
 ## 🚀 核心优势
 
 ### 🛡️ 极致安全与隐蔽
-*   **主动探测防御**：内置高度智能的流量识别引擎。当检测到非协议特征的探测（如非法路径扫描或爬虫）时，系统会自动分流至内置的伪装站点，并返回欺骗性的诱导信息，令攻击者无从下手。
-*   **元数据加密 (AES-GCM)**：所有流建立信息均经过 `AES-128-GCM` 加密，密钥通过 HKDF 算法从 PSK 动态派生，确保即便握手过程也被完全掩盖。
+*   **零同步 (Zero-Sync) 架构**：通过 IV 盐值派生技术，实现加密密钥与序列号的彻底脱钩。无论网络延迟或乱序，双端均能即时计算出完全一致的密钥，彻底根治解密失败问题。
+*   **主动探测防御**：内置高度智能的流量识别引擎。当检测到非协议特征的探测（如非法路径扫描或爬虫）时，系统会自动分流至内置的伪装站点。
+*   **元数据加密 (AES-GCM)**：所有流建立信息均经过 `AES-128-GCM` 加密，确保即便握手过程也被完全掩盖。
 *   **会话动态轮换 (Rotation)**：支持基于时间或流量的自动连接轮换，彻底消除长连接带来的统计学指纹特征。
 
 ### ⚡ 卓越性能
