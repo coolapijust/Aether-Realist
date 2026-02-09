@@ -66,7 +66,7 @@ var (
 func main() {
 	flag.Parse()
 
-	log.Printf("Aether Gateway 3.1.2-ZeroSync starting")
+	log.Printf("Aether Gateway 3.2.0 starting")
 
 	// Support $PORT or $LISTEN_ADDR environment variables
 	if envPort := os.Getenv("PORT"); envPort != "" {
@@ -103,8 +103,7 @@ func main() {
 	}
 	// Normalize PSK (Trim whitespace to avoid common config issues)
 	*psk = strings.TrimSpace(*psk)
-	pskHash := sha256.Sum256([]byte(*psk))
-	log.Printf("Config: PSK loaded (Hash: %x...)", pskHash[:4])
+	log.Printf("Config: PSK loaded and normalized")
 
 	// Initialize Certificate Loader for hot-reloading
 	certLoader, err := NewCertificateLoader(*certFile, *keyFile)
@@ -302,8 +301,6 @@ func handleStream(stream webtransport.Stream, psk string, streamID uint64) {
 		return
 	}
 
-	pskHash := sha256.Sum256([]byte(strings.TrimSpace(psk)))
-	log.Printf("[Stream %d] Attempting decryption (PSK Hash: %x...)", streamID, pskHash[:4])
 	meta, err := core.DecryptMetadata(record, psk)
 	if err != nil {
 		log.Printf("[Stream %d] Decrypt failed: %v", streamID, err)
