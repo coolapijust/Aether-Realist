@@ -48,7 +48,7 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 	if _, err := io.ReadFull(r.reader, lengthBytes); err != nil {
 		return nil, err
 	}
-	
+
 	totalLength := binary.BigEndian.Uint32(lengthBytes)
 	if totalLength < RecordHeaderLength {
 		return nil, errors.New("invalid record length")
@@ -59,10 +59,20 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 		return nil, err
 	}
 
-	recordType := recordBytes[0]
-	payloadLength := binary.BigEndian.Uint32(recordBytes[4:8])
-	paddingLength := binary.BigEndian.Uint32(recordBytes[8:12])
-	iv := recordBytes[12:24]
+	version := recordBytes[headerVersionOffset]
+	if version != ProtocolVersion {
+		return nil, errors.New("unsupported protocol version")
+	}
+
+	recordType := recordBytes[headerTypeOffset]
+	timestamp := binary.BigEndian.Uint64(recordBytes[headerTimestampOffset : headerTimestampOffset+headerTimestampSize])
+	payloadLength := binary.BigEndian.Uint32(recordBytes[headerPayloadLenOffset : headerPayloadLenOffset+4])
+	paddingLength := binary.BigEndian.Uint32(recordBytes[headerPaddingLenOffset : headerPaddingLenOffset+4])
+	iv := recordBytes[headerIVOffset : headerIVOffset+headerIVLength]
+
+	if !IsTimestampValid(timestamp, time.Now(), DefaultReplayWindow) {
+		return nil, errors.New("timestamp outside allowed window")
+	}
 
 	if int(RecordHeaderLength+payloadLength+paddingLength) != len(recordBytes) {
 		return nil, errors.New("invalid payload length")
@@ -73,7 +83,16 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 	payloadEnd := payloadStart + int(payloadLength)
 	payload := recordBytes[payloadStart:payloadEnd]
 
-	result := &Record{Type: recordType, Payload: payload, Header: header, IV: iv}
+	result := &Record{
+		Version:       version,
+		Type:          recordType,
+		TimestampNano: timestamp,
+		PayloadLength: payloadLength,
+		PaddingLength: paddingLength,
+		Payload:       payload,
+		Header:        header,
+		IV:            iv,
+	}
 	if recordType == TypeError {
 		if len(payload) >= 4 {
 			// Skip 2 bytes error code?
@@ -127,13 +146,13 @@ func (rw *RecordReadWriter) Write(p []byte) (n int, err error) {
 	for len(src) > 0 {
 		// Randomize chunk size between 2KB and 16KB
 		// This breaks the correlation between application writes and network packets
-		chunkSize := 2048 + rnd.Intn(14*1024) 
+		chunkSize := 2048 + rnd.Intn(14*1024)
 		if chunkSize > len(src) {
 			chunkSize = len(src)
 		}
 
 		chunk := src[:chunkSize]
-		
+
 		// Build record with padding
 		record, err := BuildDataRecord(chunk, rw.maxPadding)
 		if err != nil {

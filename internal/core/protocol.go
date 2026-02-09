@@ -10,18 +10,31 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/hkdf"
 )
 
 const (
-	ProtocolLabel      = "aether-realist-v3"
-	RecordHeaderLength = 24
+	ProtocolLabel      = "aether-realist-v4"
+	ProtocolVersion    = 0x04
+	RecordHeaderLength = 30
 	TypeMetadata       = 0x01
 	TypeData           = 0x02
 	TypePing           = 0x03
 	TypePong           = 0x04
 	TypeError          = 0x7f
+)
+
+const (
+	headerVersionOffset    = 0
+	headerTypeOffset       = 1
+	headerTimestampOffset  = 2
+	headerTimestampSize    = 8
+	headerPayloadLenOffset = 10
+	headerPaddingLenOffset = 14
+	headerIVOffset         = 18
+	headerIVLength         = 12
 )
 
 // Metadata represents the connection target information
@@ -38,11 +51,15 @@ type Options struct {
 
 // Record represents a parsed record
 type Record struct {
-	Type         byte
-	Payload      []byte
-	Header       []byte
-	IV           []byte
-	ErrorMessage string
+	Version       byte
+	Type          byte
+	TimestampNano uint64
+	PayloadLength uint32
+	PaddingLength uint32
+	Payload       []byte
+	Header        []byte
+	IV            []byte
+	ErrorMessage  string
 }
 
 // BuildMetadataRecord creates an encrypted metadata record.
@@ -62,20 +79,18 @@ func BuildMetadataRecord(host string, port uint16, maxPadding uint16, psk string
 		return nil, err
 	}
 
-	header := make([]byte, RecordHeaderLength)
-	header[0] = TypeMetadata
-	
-	// Use final ciphertext length for AAD consistency
-	ciphertextLen := len(plaintext) + 16
-	binary.BigEndian.PutUint32(header[4:8], uint32(ciphertextLen))
-	binary.BigEndian.PutUint32(header[8:12], 0)
-	copy(header[12:24], iv)
-
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use final ciphertext length for AAD consistency
+	ciphertextLen := len(plaintext) + gcm.Overhead()
+	header, err := buildHeader(TypeMetadata, ciphertextLen, 0, iv)
 	if err != nil {
 		return nil, err
 	}
@@ -95,15 +110,27 @@ func BuildDataRecord(payload []byte, maxPadding uint16) ([]byte, error) {
 		}
 	}
 
-	header := make([]byte, RecordHeaderLength)
-	header[0] = TypeData
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(payload)))
-	binary.BigEndian.PutUint32(header[8:12], uint32(len(padding)))
-	if _, err := rand.Read(header[12:24]); err != nil {
+	iv := make([]byte, headerIVLength)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+
+	header, err := buildHeader(TypeData, len(payload), len(padding), iv)
+	if err != nil {
 		return nil, err
 	}
 
 	return buildRecord(header, payload, padding), nil
+}
+
+// BuildPingRecord creates a ping record.
+func BuildPingRecord() ([]byte, error) {
+	return buildControlRecord(TypePing)
+}
+
+// BuildPongRecord creates a pong record.
+func BuildPongRecord() ([]byte, error) {
+	return buildControlRecord(TypePong)
 }
 
 // buildRecord assembles a complete record.
@@ -115,6 +142,33 @@ func buildRecord(header, payload, padding []byte) []byte {
 	copy(record[4+RecordHeaderLength:], payload)
 	copy(record[4+RecordHeaderLength+len(payload):], padding)
 	return record
+}
+
+func buildHeader(recordType byte, payloadLen, paddingLen int, iv []byte) ([]byte, error) {
+	if len(iv) != headerIVLength {
+		return nil, fmt.Errorf("invalid IV length: %d", len(iv))
+	}
+
+	header := make([]byte, RecordHeaderLength)
+	header[headerVersionOffset] = ProtocolVersion
+	header[headerTypeOffset] = recordType
+	binary.BigEndian.PutUint64(header[headerTimestampOffset:headerTimestampOffset+headerTimestampSize], uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint32(header[headerPayloadLenOffset:headerPayloadLenOffset+4], uint32(payloadLen))
+	binary.BigEndian.PutUint32(header[headerPaddingLenOffset:headerPaddingLenOffset+4], uint32(paddingLen))
+	copy(header[headerIVOffset:headerIVOffset+headerIVLength], iv)
+	return header, nil
+}
+
+func buildControlRecord(recordType byte) ([]byte, error) {
+	iv := make([]byte, headerIVLength)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+	header, err := buildHeader(recordType, 0, 0, iv)
+	if err != nil {
+		return nil, err
+	}
+	return buildRecord(header, nil, nil), nil
 }
 
 // buildMetadataPayload creates the plaintext metadata.
@@ -141,7 +195,7 @@ func buildMetadataPayload(host string, port uint16, maxPadding uint16) ([]byte, 
 	options := buildOptions(maxPadding)
 	payload := make([]byte, 0, 1+2+len(addrBytes)+2+len(options))
 	payload = append(payload, addrType)
-	
+
 	portBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(portBytes, port)
 	payload = append(payload, portBytes...)
@@ -204,7 +258,7 @@ func DecryptMetadata(record *Record, psk string) (*Metadata, error) {
 	// In some environments, if nonce/AAD/ciphertext overlap, authentication fails.
 	iv := make([]byte, len(record.IV))
 	copy(iv, record.IV)
-	
+
 	header := make([]byte, len(record.Header))
 	copy(header, record.Header)
 
@@ -230,9 +284,20 @@ func DecryptMetadata(record *Record, psk string) (*Metadata, error) {
 	return ParseMetadata(plaintext)
 }
 
+// IsTimestampValid validates timestamp against a time window.
+func IsTimestampValid(timestampNano uint64, now time.Time, window time.Duration) bool {
+	if timestampNano == 0 {
+		return false
+	}
+	timestamp := time.Unix(0, int64(timestampNano))
+	delta := now.Sub(timestamp)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= window
+}
+
 // ... (ParseMetadata and parseOptions remain same) ...
-
-
 
 // ParseMetadata parses the decrypted metadata payload
 func ParseMetadata(buffer []byte) (*Metadata, error) {
@@ -281,7 +346,7 @@ func ParseMetadata(buffer []byte) (*Metadata, error) {
 		return nil, fmt.Errorf("missing options payload")
 	}
 	optionsPayload := buffer[offset : offset+int(optionsLength)]
-	
+
 	options := parseOptions(optionsPayload)
 
 	return &Metadata{
@@ -318,16 +383,11 @@ func BuildErrorRecord(code uint16, message string) ([]byte, error) {
 	binary.BigEndian.PutUint16(payload[0:2], code)
 	copy(payload[4:], messageBytes)
 
-	// Error records have 0 padding
-	// Header: Type(1) + PayloadLen(4) + PaddingLen(4) + IV(12)
-	header := make([]byte, RecordHeaderLength)
-	header[0] = TypeError
-	
-	// Bytes 1-3 are reserved/padding
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(payload)))
-	binary.BigEndian.PutUint32(header[8:12], 0)
-	
-	// IV is zero for error records, so we leave header[12:24] as 0
-	
+	iv := make([]byte, headerIVLength)
+	header, err := buildHeader(TypeError, len(payload), 0, iv)
+	if err != nil {
+		return nil, err
+	}
+
 	return buildRecord(header, payload, nil), nil
 }

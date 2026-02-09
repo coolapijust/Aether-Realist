@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"crypto/tls"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -20,15 +19,15 @@ import (
 
 // sessionManager manages WebTransport sessions and their lifecycle.
 type sessionManager struct {
-	config       *SessionConfig
-	dialer       *webtransport.Dialer
-	session      *webtransport.Session
-	sessionID    string
-	mu           sync.RWMutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	onEvent      func(Event)
-	metrics      *Metrics
+	config    *SessionConfig
+	dialer    *webtransport.Dialer
+	session   *webtransport.Session
+	sessionID string
+	mu        sync.RWMutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	onEvent   func(Event)
+	metrics   *Metrics
 }
 
 // newSessionManager creates a new session manager.
@@ -47,7 +46,7 @@ func newSessionManager(config *SessionConfig, onEvent func(Event), metrics *Metr
 func (sm *sessionManager) updateConfig(config *SessionConfig) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	
+
 	sm.config = config
 	// Force dialer re-initialization on next connect
 	sm.dialer = nil
@@ -68,12 +67,13 @@ func (sm *sessionManager) initialize() error {
 	}
 
 	quicConfig := &quic.Config{
-		KeepAlivePeriod:            20 * time.Second,
-		MaxIdleTimeout:             60 * time.Second,
-		EnableDatagrams:            true,
-		MaxIncomingStreams:         1000,
-		InitialStreamReceiveWindow:     4 * 1024 * 1024, // 4 MB (Initial)
-		InitialConnectionReceiveWindow: 6 * 1024 * 1024, // 6 MB (Initial)
+		KeepAlivePeriod:                20 * time.Second,
+		MaxIdleTimeout:                 60 * time.Second,
+		EnableDatagrams:                true,
+		Enable0RTT:                     true,
+		MaxIncomingStreams:             1000,
+		InitialStreamReceiveWindow:     4 * 1024 * 1024,  // 4 MB (Initial)
+		InitialConnectionReceiveWindow: 6 * 1024 * 1024,  // 6 MB (Initial)
 		MaxStreamReceiveWindow:         32 * 1024 * 1024, // 32 MB (Max)
 		MaxConnectionReceiveWindow:     48 * 1024 * 1024, // 48 MB (Max)
 	}
@@ -251,7 +251,7 @@ func (sm *sessionManager) dialSession(ctx context.Context) (*webtransport.Sessio
 			u.Host = net.JoinHostPort(u.Hostname(), defaultPort)
 		}
 	}
-	
+
 	// Handle DialAddr override (e.g. for IP optimization)
 	finalAddr := u.Host
 	if sm.config.DialAddr != "" {
@@ -260,7 +260,7 @@ func (sm *sessionManager) dialSession(ctx context.Context) (*webtransport.Sessio
 			// Handle missing port error (common for raw IPs/domains)
 			if strings.Contains(err.Error(), "missing port") || strings.Contains(err.Error(), "too many colons") {
 				host = sm.config.DialAddr
-				port = "443" 
+				port = "443"
 			} else {
 				return nil, fmt.Errorf("invalid dial addr: %w", err)
 			}
@@ -322,22 +322,21 @@ func (sm *sessionManager) pingOnce() {
 	}
 
 	start := time.Now()
-	
+
 	// Create a short-lived stream for ping
 	ctx, cancel := context.WithTimeout(sm.ctx, 5*time.Second)
 	defer cancel()
-	
+
 	stream, _, err := sm.OpenStream(ctx)
 	if err != nil {
 		return
 	}
 	defer stream.Close()
 
-	// Send Ping record
-	pingRecord := make([]byte, 4+RecordHeaderLength)
-	binary.BigEndian.PutUint32(pingRecord[0:4], uint32(RecordHeaderLength))
-	pingRecord[4] = TypePing
-	
+	pingRecord, err := BuildPingRecord()
+	if err != nil {
+		return
+	}
 	if _, err := stream.Write(pingRecord); err != nil {
 		return
 	}
