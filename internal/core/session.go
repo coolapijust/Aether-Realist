@@ -70,7 +70,7 @@ func (sm *sessionManager) initialize() error {
 		KeepAlivePeriod:                20 * time.Second,
 		MaxIdleTimeout:                 60 * time.Second,
 		EnableDatagrams:                true,
-		Enable0RTT:                     true,
+		Allow0RTT:                      true,
 		MaxIncomingStreams:             1000,
 		InitialStreamReceiveWindow:     4 * 1024 * 1024,  // 4 MB (Initial)
 		InitialConnectionReceiveWindow: 6 * 1024 * 1024,  // 6 MB (Initial)

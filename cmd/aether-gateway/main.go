@@ -153,7 +153,7 @@ func main() {
 	quicConfig := &quic.Config{
 		EnableDatagrams:                true,
 		MaxIdleTimeout:                 60 * time.Second,
-		Enable0RTT:                     true,
+		Allow0RTT:                      true,
 		MaxIncomingStreams:             1000,
 		InitialStreamReceiveWindow:     4 * 1024 * 1024,  // 4 MB (Initial)
 		InitialConnectionReceiveWindow: 6 * 1024 * 1024,  // 6 MB (Initial)

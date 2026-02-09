@@ -151,7 +151,6 @@ func newSessionManager(opts clientOptions) (*sessionManager, error) {
 		KeepAlivePeriod: 20 * time.Second,
 		MaxIdleTimeout:  60 * time.Second,
 		EnableDatagrams: true,
-		Enable0RTT:      true,
 	}
 
 	dialer := &webtransport.Dialer{
