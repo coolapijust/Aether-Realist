@@ -1,4 +1,8 @@
-// Package core provides protocol primitives for Aether-Realist.\n//\n// Deprecated: ReplayCache is deprecated in V5. Use counter-based anti-replay instead.\n// This file is retained for V4 compatibility only.\npackage core
+// Package core provides protocol primitives for Aether-Realist.
+//
+// Deprecated: ReplayCache is deprecated in V5. Use counter-based anti-replay instead.
+// This file is retained for V4 compatibility only.
+package core
 
 import (
 	"sync"
@@ -24,7 +28,12 @@ func NewReplayCache(ttl time.Duration) *ReplayCache {
 	return rc
 }
 
-// SeenOrAdd returns true if the IV was already seen; otherwise stores it.\n// Deprecated: Use counter-based anti-replay in V5.\nfunc (rc *ReplayCache) SeenOrAdd(iv []byte, now time.Time) bool {\n\tif len(iv) != nonceLength {\n\t\treturn true\n\t}
+// SeenOrAdd returns true if the IV was already seen; otherwise stores it.
+// Deprecated: Use counter-based anti-replay in V5.
+func (rc *ReplayCache) SeenOrAdd(iv []byte, now time.Time) bool {
+	if len(iv) != nonceLength {
+		return true
+	}
 	key := string(append([]byte(nil), iv...))
 	if _, loaded := rc.cache.LoadOrStore(key, now.Add(rc.ttl)); loaded {
 		return true
