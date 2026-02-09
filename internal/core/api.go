@@ -611,7 +611,7 @@ func (c *Core) openStreamInternal(target TargetAddress, options map[string]inter
 		maxPadding = uint16(v)
 	}
 
-	metaRecord, err := BuildMetadataRecord(target.Host, uint16(target.Port), maxPadding, c.config.PSK, streamID)
+	metaRecord, err := BuildMetadataRecord(target.Host, uint16(target.Port), maxPadding, c.config.PSK)
 	if err != nil {
 		stream.Close()
 		return StreamHandle{}, err

@@ -45,7 +45,7 @@ type Record struct {
 }
 
 // BuildMetadataRecord creates an encrypted metadata record.
-func BuildMetadataRecord(host string, port uint16, maxPadding uint16, psk string, streamID uint64) ([]byte, error) {
+func BuildMetadataRecord(host string, port uint16, maxPadding uint16, psk string) ([]byte, error) {
 	plaintext, err := buildMetadataPayload(host, port, maxPadding)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func BuildMetadataRecord(host string, port uint16, maxPadding uint16, psk string
 		return nil, err
 	}
 
-	key, err := deriveKey(psk, streamID)
+	key, err := deriveKey(psk, iv)
 	if err != nil {
 		return nil, err
 	}
@@ -166,9 +166,8 @@ func buildOptions(maxPadding uint16) []byte {
 }
 
 // deriveKey derives AES key from PSK using HKDF.
-func deriveKey(psk string, streamID uint64) ([]byte, error) {
-	info := []byte(fmt.Sprintf("%d", streamID))
-	reader := hkdf.New(sha256.New, []byte(psk), []byte(ProtocolLabel), info)
+func deriveKey(psk string, salt []byte) ([]byte, error) {
+	reader := hkdf.New(sha256.New, []byte(psk), salt, []byte(ProtocolLabel))
 	key := make([]byte, 16)
 	if _, err := io.ReadFull(reader, key); err != nil {
 		return nil, err
@@ -189,11 +188,11 @@ func randomPadding(maxPadding uint16) int {
 }
 
 // DecryptMetadata decrypts the metadata record
-func DecryptMetadata(record *Record, psk string, streamID uint64) (*Metadata, error) {
+func DecryptMetadata(record *Record, psk string) (*Metadata, error) {
 	if psk == "" {
 		return nil, fmt.Errorf("missing psk")
 	}
-	key, err := deriveKey(psk, streamID)
+	key, err := deriveKey(psk, record.IV)
 	if err != nil {
 		return nil, err
 	}

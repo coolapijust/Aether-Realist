@@ -295,7 +295,7 @@ func handleStream(stream webtransport.Stream, psk string, streamID uint64) {
 		return
 	}
 
-	meta, err := core.DecryptMetadata(record, psk, streamID)
+	meta, err := core.DecryptMetadata(record, psk)
 	if err != nil {
 		log.Printf("[Stream %d] Decrypt failed: %v", streamID, err)
 		writeError(stream, 0x0002, "metadata decrypt failed")
