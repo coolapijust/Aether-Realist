@@ -29,11 +29,24 @@ import (
 )
 
 const (
-	protocolLabel      = "aether-realist-v3"
-	recordHeaderLength = 24
+	protocolLabel      = "aether-realist-v4"
+	protocolVersion    = 0x04
+	recordHeaderLength = 30
 	typeMetadata       = 0x01
 	typeData           = 0x02
 	typeError          = 0x7f
+	timestampWindow    = 30 * time.Second
+)
+
+const (
+	headerVersionOffset    = 0
+	headerTypeOffset       = 1
+	headerTimestampOffset  = 2
+	headerTimestampSize    = 8
+	headerPayloadLenOffset = 10
+	headerPaddingLenOffset = 14
+	headerIVOffset         = 18
+	headerIVLength         = 12
 )
 
 type clientOptions struct {
@@ -138,6 +151,7 @@ func newSessionManager(opts clientOptions) (*sessionManager, error) {
 		KeepAlivePeriod: 20 * time.Second,
 		MaxIdleTimeout:  60 * time.Second,
 		EnableDatagrams: true,
+		Enable0RTT:      true,
 	}
 
 	dialer := &webtransport.Dialer{
@@ -229,7 +243,7 @@ func (m *sessionManager) dialSession(ctx context.Context) (*webtransport.Session
 
 	// Determine the URL to dial
 	dialURL := m.url.String()
-	
+
 	// If dialAddr is specified, construct URL with override address
 	if m.opts.dialAddr != "" {
 		// Parse dialAddr to ensure it has port
@@ -241,7 +255,7 @@ func (m *sessionManager) dialSession(ctx context.Context) (*webtransport.Session
 			}
 			host, port, _ = net.SplitHostPort(m.opts.dialAddr)
 		}
-		
+
 		// Construct new URL with override host:port
 		parsedCopy := *m.url
 		parsedCopy.Host = net.JoinHostPort(host, port)
@@ -362,9 +376,19 @@ func readRecord(reader io.Reader) (*record, error) {
 		return nil, err
 	}
 
-	recordType := recordBytes[0]
-	payloadLength := binary.BigEndian.Uint32(recordBytes[4:8])
-	paddingLength := binary.BigEndian.Uint32(recordBytes[8:12])
+	version := recordBytes[headerVersionOffset]
+	if version != protocolVersion {
+		return nil, errors.New("unsupported protocol version")
+	}
+
+	recordType := recordBytes[headerTypeOffset]
+	timestamp := binary.BigEndian.Uint64(recordBytes[headerTimestampOffset : headerTimestampOffset+headerTimestampSize])
+	payloadLength := binary.BigEndian.Uint32(recordBytes[headerPayloadLenOffset : headerPayloadLenOffset+4])
+	paddingLength := binary.BigEndian.Uint32(recordBytes[headerPaddingLenOffset : headerPaddingLenOffset+4])
+
+	if !isTimestampValid(timestamp, time.Now(), timestampWindow) {
+		return nil, errors.New("timestamp outside allowed window")
+	}
 
 	if int(recordHeaderLength+payloadLength+paddingLength) != len(recordBytes) {
 		return nil, errors.New("invalid payload length")
@@ -383,27 +407,21 @@ func readRecord(reader io.Reader) (*record, error) {
 	return result, nil
 }
 
-func buildMetadataRecord(host string, port uint16, maxPadding uint16, psk string, streamID uint64) ([]byte, error) {
+func buildMetadataRecord(host string, port uint16, maxPadding uint16, psk string, _ uint64) ([]byte, error) {
 	plaintext, err := buildMetadataPayload(host, port, maxPadding)
 	if err != nil {
 		return nil, err
 	}
 
-	iv := make([]byte, 12)
+	iv := make([]byte, headerIVLength)
 	if _, err := rand.Read(iv); err != nil {
 		return nil, err
 	}
 
-	key, err := deriveKey(psk, streamID)
+	key, err := deriveKey(psk, iv)
 	if err != nil {
 		return nil, err
 	}
-
-	header := make([]byte, recordHeaderLength)
-	header[0] = typeMetadata
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(plaintext)))
-	binary.BigEndian.PutUint32(header[8:12], 0)
-	copy(header[12:24], iv)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -414,8 +432,13 @@ func buildMetadataRecord(host string, port uint16, maxPadding uint16, psk string
 		return nil, err
 	}
 
+	ciphertextLen := len(plaintext) + gcm.Overhead()
+	header, err := buildHeader(typeMetadata, uint32(ciphertextLen), 0, iv)
+	if err != nil {
+		return nil, err
+	}
+
 	ciphertext := gcm.Seal(nil, iv, plaintext, header)
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(ciphertext)))
 
 	return buildRecord(header, ciphertext, nil), nil
 }
@@ -429,11 +452,13 @@ func buildDataRecord(payload []byte, maxPadding uint16) ([]byte, error) {
 		}
 	}
 
-	header := make([]byte, recordHeaderLength)
-	header[0] = typeData
-	binary.BigEndian.PutUint32(header[4:8], uint32(len(payload)))
-	binary.BigEndian.PutUint32(header[8:12], uint32(len(padding)))
-	if _, err := rand.Read(header[12:24]); err != nil {
+	iv := make([]byte, headerIVLength)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+
+	header, err := buildHeader(typeData, uint32(len(payload)), uint32(len(padding)), iv)
+	if err != nil {
 		return nil, err
 	}
 
@@ -448,6 +473,20 @@ func buildRecord(header, payload, padding []byte) []byte {
 	copy(record[4+recordHeaderLength:], payload)
 	copy(record[4+recordHeaderLength+len(payload):], padding)
 	return record
+}
+
+func buildHeader(recordType byte, payloadLength uint32, paddingLength uint32, iv []byte) ([]byte, error) {
+	if len(iv) != headerIVLength {
+		return nil, fmt.Errorf("invalid IV length: %d", len(iv))
+	}
+	header := make([]byte, recordHeaderLength)
+	header[headerVersionOffset] = protocolVersion
+	header[headerTypeOffset] = recordType
+	binary.BigEndian.PutUint64(header[headerTimestampOffset:headerTimestampOffset+headerTimestampSize], uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint32(header[headerPayloadLenOffset:headerPayloadLenOffset+4], payloadLength)
+	binary.BigEndian.PutUint32(header[headerPaddingLenOffset:headerPaddingLenOffset+4], paddingLength)
+	copy(header[headerIVOffset:headerIVOffset+headerIVLength], iv)
+	return header, nil
 }
 
 func buildMetadataPayload(host string, port uint16, maxPadding uint16) ([]byte, error) {
@@ -496,14 +535,25 @@ func buildOptions(maxPadding uint16) []byte {
 	return option
 }
 
-func deriveKey(psk string, streamID uint64) ([]byte, error) {
-	info := []byte(fmt.Sprintf("%d", streamID))
-	reader := hkdf.New(sha256.New, []byte(psk), []byte(protocolLabel), info)
+func deriveKey(psk string, salt []byte) ([]byte, error) {
+	reader := hkdf.New(sha256.New, []byte(psk), salt, []byte(protocolLabel))
 	key := make([]byte, 16)
 	if _, err := io.ReadFull(reader, key); err != nil {
 		return nil, err
 	}
 	return key, nil
+}
+
+func isTimestampValid(timestampNano uint64, now time.Time, window time.Duration) bool {
+	if timestampNano == 0 {
+		return false
+	}
+	ts := time.Unix(0, int64(timestampNano))
+	delta := now.Sub(ts)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= window
 }
 
 func randomPadding(maxPadding uint16) int {

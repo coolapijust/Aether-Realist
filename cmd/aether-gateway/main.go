@@ -1,15 +1,14 @@
 package main
 
 import (
-	"context"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/binary"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -118,7 +117,7 @@ func main() {
 			certLoader = &CertificateLoader{cert: &certs}
 		} else {
 			// If user provided files but they failed to load, we should probably warn and fallback or exit
-			// But for now let's just log error and maybe generate self-signed? 
+			// But for now let's just log error and maybe generate self-signed?
 			// Actually better to fail if files were specified but invalid
 			log.Printf("Warning: Failed to load specified certificates: %v. Generating temporary self-signed...", err)
 			certs, err := generateSelfSignedCert(domainEnv)
@@ -152,11 +151,12 @@ func main() {
 	}
 
 	quicConfig := &quic.Config{
-		EnableDatagrams:            true,
-		MaxIdleTimeout:             60 * time.Second,
-		MaxIncomingStreams:         1000,
-		InitialStreamReceiveWindow:     4 * 1024 * 1024, // 4 MB (Initial)
-		InitialConnectionReceiveWindow: 6 * 1024 * 1024, // 6 MB (Initial)
+		EnableDatagrams:                true,
+		MaxIdleTimeout:                 60 * time.Second,
+		Enable0RTT:                     true,
+		MaxIncomingStreams:             1000,
+		InitialStreamReceiveWindow:     4 * 1024 * 1024,  // 4 MB (Initial)
+		InitialConnectionReceiveWindow: 6 * 1024 * 1024,  // 6 MB (Initial)
 		MaxStreamReceiveWindow:         32 * 1024 * 1024, // 32 MB (Max)
 		MaxConnectionReceiveWindow:     48 * 1024 * 1024, // 48 MB (Max)
 		Tracer:                         tracer,
@@ -170,6 +170,7 @@ func main() {
 		},
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
+	replayCache := core.NewReplayCache(core.DefaultReplayWindow)
 
 	http.HandleFunc(*secretPath, func(w http.ResponseWriter, r *http.Request) {
 		// Log every attempt to the secret path
@@ -186,7 +187,7 @@ func main() {
 		}
 
 		log.Printf("[INFO] WebTransport session upgraded for %s", r.RemoteAddr)
-		handleSession(session, *psk)
+		handleSession(session, *psk, replayCache)
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -262,53 +263,60 @@ func main() {
 	}
 }
 
-func handleSession(session *webtransport.Session, psk string) {
+func handleSession(session *webtransport.Session, psk string, replayCache *core.ReplayCache) {
 	log.Println("New session established")
-	
+
 	for {
 		stream, err := session.AcceptStream(context.Background())
 		if err != nil {
 			log.Printf("AcceptStream failed: %v", err)
 			break
 		}
-		
+
 		id := uint64(stream.StreamID())
-		go handleStream(stream, psk, id)
+		go handleStream(stream, psk, id, replayCache)
 	}
 }
 
-func handleStream(stream webtransport.Stream, psk string, streamID uint64) {
+func handleStream(stream webtransport.Stream, psk string, streamID uint64, replayCache *core.ReplayCache) {
 	defer stream.Close()
 
 	reader := core.NewRecordReader(stream)
-	
+
 	// Read Metadata
 	record, err := reader.ReadNextRecord()
 	if err != nil {
-		log.Printf("[Stream %d] Failed to read metadata record: %v", streamID, err)
-		writeError(stream, 0x0001, "metadata required")
+		log.Printf("[SECURITY] [Stream %d] Failed to read metadata record: %v", streamID, err)
 		return
 	}
 
 	if record.Type == core.TypePing {
-		pongRecord := make([]byte, 4+core.RecordHeaderLength)
-		binary.BigEndian.PutUint32(pongRecord[0:4], uint32(core.RecordHeaderLength))
-		pongRecord[4] = core.TypePong
-		// Header fields 4-24 are zeroes or random, doesn't matter much for Pong
-		stream.Write(pongRecord)
+		pongRecord, err := core.BuildPongRecord()
+		if err != nil {
+			return
+		}
+		_, _ = stream.Write(pongRecord)
 		return
 	}
 
 	if record.Type != core.TypeMetadata {
-		log.Printf("[Stream %d] Invalid record type: %d", streamID, record.Type)
-		writeError(stream, 0x0001, "metadata required")
+		log.Printf("[SECURITY] [Stream %d] Invalid record type: %d", streamID, record.Type)
+		return
+	}
+
+	if !core.IsTimestampValid(record.TimestampNano, time.Now(), core.DefaultReplayWindow) {
+		log.Printf("[SECURITY] [Stream %d] Timestamp outside allowed window", streamID)
+		return
+	}
+
+	if replayCache.SeenOrAdd(record.IV, time.Now()) {
+		log.Printf("[SECURITY] [Stream %d] Duplicate IV detected", streamID)
 		return
 	}
 
 	meta, err := core.DecryptMetadata(record, psk)
 	if err != nil {
-		log.Printf("[Stream %d] Decrypt failed: %v", streamID, err)
-		writeError(stream, 0x0002, "metadata decrypt failed")
+		log.Printf("[SECURITY] [Stream %d] Decrypt failed: %v", streamID, err)
 		return
 	}
 
@@ -417,7 +425,7 @@ func generateSelfSignedCert(domain string) (tls.Certificate, error) {
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-		DNSNames:             []string{domain},
+		DNSNames:              []string{domain},
 	}
 	if domain == "" {
 		template.DNSNames = []string{"localhost"}
@@ -454,10 +462,10 @@ func NewCertificateLoader(certFile, keyFile string) (*CertificateLoader, error) 
 	if err := loader.forceReload(); err != nil {
 		return nil, err
 	}
-	
+
 	// Start signal listener
 	go loader.listenForSignal()
-	
+
 	return loader, nil
 }
 
