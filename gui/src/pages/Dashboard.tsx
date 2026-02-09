@@ -100,18 +100,27 @@ export default function Dashboard() {
     return Math.round(totalDiff / (latencies.length - 1));
   })();
 
-  // Extract latest metrics
-  const lastMetrics = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : null;
-  const currentUp = lastMetrics ? lastMetrics.upload / 1024 / 1024 / 5 : 0;
-  const currentDown = lastMetrics ? lastMetrics.download / 1024 / 1024 / 5 : 0;
+  // Calculate real-time speed by computing delta
+  const chartData = metricsHistory.slice(-31).map((m, i, arr) => {
+    if (i === 0) return { time: m.time, upload: 0, download: 0, latency: m.latencyMs || 0 };
+    const prev = arr[i - 1];
+    const timeDiff = (m.timestamp - prev.timestamp) / 1000; // seconds
+    if (timeDiff <= 0) return { time: m.timestamp, upload: 0, download: 0, latency: m.latencyMs || 0 };
 
-  // Prepare chart data (last 30 snapshots)
-  const chartData = metricsHistory.slice(-30).map((m) => ({
-    time: m.timestamp,
-    upload: m.upload / 1024 / 1024,
-    download: m.download / 1024 / 1024,
-    latency: m.latencyMs || 0,
-  }));
+    const upDelta = m.upload - prev.upload;
+    const downDelta = m.download - prev.download;
+
+    return {
+      time: m.timestamp,
+      upload: Math.max(0, upDelta / 1024 / 1024 / timeDiff), // MB/s
+      download: Math.max(0, downDelta / 1024 / 1024 / timeDiff), // MB/s
+      latency: m.latencyMs || 0,
+    };
+  }).slice(1); // Remove first item as it has no delta
+
+  // Current speed is the last point in the chart
+  const currentUp = chartData.length > 0 ? chartData[chartData.length - 1].upload : 0;
+  const currentDown = chartData.length > 0 ? chartData[chartData.length - 1].download : 0;
 
   return (
     <Box sx={{ p: 3, height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>

@@ -84,7 +84,12 @@
 Metadata Record 的 Payload 必须使用 `AES-128-GCM` 加密。
 
 - **PSK**：预共享密钥，由部署者配置。
-- **Key Derivation**：`HKDF-SHA256(PSK, salt="aether-realist-v3", info=stream-id)`，截断前 16 字节作为密钥。
+- **PSK**：预共享密钥，由部署者配置。
+- **Key Derivation (Zero-Sync)**：
+    - 采用标准 HKDF-SHA256 算法。
+    - `PRK = HKDF-Extract(salt=IV, IKM=PSK)` (注意：直接使用 Record Header 中的 IV 作为 Salt)。
+    - `Key = HKDF-Expand(PRK, info="aether-v3-gcm", L=16)`。
+    - **设计意图**：由于 IV 随每个 Record 变化且明文传输（RFC 8446 允许），接收端可直接用 header.IV 导出该包的解密密钥。即便数据包乱序或重传，解密也互不影响。
 - **Nonce/IV**：Record Header 中的 12 字节随机值。
 - **AAD**：Record Header（Type/Flags/Reserved/Payload Length/Padding Length/IV）。
 
@@ -96,6 +101,9 @@ Metadata Record 的 Payload 必须使用 `AES-128-GCM` 加密。
   - 入站：WebTransport Data Record → Socket
   - 出站：Socket → WebTransport Data Record
 - 应使用流式写入确保背压生效（`readable.pipeTo(writable)` 或等价实现）。
+- **流量混淆 (Traffic Chunking)**：
+    - 发送端应将大数据流拆分为 **2KB - 16KB** 的随机大小片段。
+    - 避免发送特征明显的 4KB/8KB 对齐数据包，以对抗 DPI 的大小分析。
 
 ## 6. 会话与流终止
 

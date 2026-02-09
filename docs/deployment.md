@@ -57,7 +57,33 @@ your-domain.com {
 
 ---
 
-## 3. 云原生与边缘平台部署 (PaaS)
+---
+ 
+ ## 3. 性能调优 (Kernel Tuning)
+ 
+ 为了在高延迟长距离链路中跑满带宽（BDP 适配），务必对 Linux 内核参数进行优化。
+ 
+ ### 推荐 sysctl 配置
+ 在 `/etc/sysctl.conf` 中添加以下内容并执行 `sysctl -p`：
+ 
+ ```bash
+ # 开启 BBR 拥塞控制
+ net.core.default_qdisc = fq
+ net.ipv4.tcp_congestion_control = bbr
+ 
+ # 增大 UDP 缓冲区上限 (关键优化 for QUIC)
+ # 16MB 缓冲区足以支撑 1Gbps @ 200ms RTT
+ net.core.rmem_max = 16777216
+ net.core.wmem_max = 16777216
+ net.core.rmem_default = 16777216
+ net.core.wmem_default = 16777216
+ ```
+ 
+ > **注意**：如果不调整此参数，当下载速度超过 50MB/s 时可能会观察到丢包导致的吞吐量剧烈波动。
+ 
+ ---
+ 
+ ## 4. 云原生与边缘平台部署 (PaaS)
 
 `aether-gateway` 已针对云原生环境进行了高度适配，支持在 Fly.io、Cloudflare Container 等容器平台上运行。
 
