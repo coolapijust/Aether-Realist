@@ -24,7 +24,6 @@ type sessionManager struct {
 	dialer       *webtransport.Dialer
 	session      *webtransport.Session
 	sessionID    string
-	counter      uint64
 	mu           sync.RWMutex
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -122,7 +121,6 @@ func (sm *sessionManager) connect() error {
 
 	sm.session = session
 	sm.sessionID = generateSessionID()
-	sm.counter = 0
 	sm.metrics.RecordSessionStart()
 
 	// Emit event
@@ -153,7 +151,6 @@ func (sm *sessionManager) rotate() error {
 	// Clear session state
 	sm.mu.Lock()
 	sm.session = nil
-	sm.counter = 0
 	sm.mu.Unlock()
 
 	// Connect new session
@@ -191,8 +188,7 @@ func (sm *sessionManager) OpenStream(ctx context.Context) (webtransport.Stream, 
 		return nil, 0, err
 	}
 
-	sm.counter++
-	return stream, sm.counter, nil
+	return stream, uint64(stream.StreamID()), nil
 }
 
 // dialSession creates a new WebTransport session.

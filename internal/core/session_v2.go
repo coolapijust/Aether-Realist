@@ -15,7 +15,6 @@ type sessionV2 struct {
 	session   *webtransport.Session
 	createdAt time.Time
 	state     sessionState
-	counter   uint64
 }
 
 type sessionState int
@@ -112,7 +111,6 @@ func (sm *sessionManagerV2) getSessionForNewStream() (*sessionV2, error) {
 		return nil, fmt.Errorf("primary session not available")
 	}
 	
-	session.counter++
 	return session, nil
 }
 

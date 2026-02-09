@@ -255,17 +255,15 @@ func main() {
 func handleSession(session *webtransport.Session, psk string) {
 	log.Println("New session established")
 	
-	// Create a stream counter
-	var streamID uint64 = 0
-
 	for {
 		stream, err := session.AcceptStream(context.Background())
 		if err != nil {
 			log.Printf("AcceptStream failed: %v", err)
 			break
 		}
-		streamID++
-		go handleStream(stream, psk, streamID)
+		
+		id := uint64(stream.StreamID())
+		go handleStream(stream, psk, id)
 	}
 }
 
