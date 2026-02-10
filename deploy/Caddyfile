@@ -1,10 +1,8 @@
 {
 	# Aether-Realist Caddy Config (Protocol V5 Optimized)
-	# 全局配置：关闭 Caddy 自带的 H3 以释放 UDP/443 (由 Backend 接管)
+	# 全局配置：禁用 Caddy 内置 H3 协议以释放 UDP 端口端口 (由 Aether Backend 处理)
 	servers {
-		protocol {
-			allow_h3 false
-		}
+		protocols h1 h2
 	}
 }
 
