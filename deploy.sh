@@ -274,10 +274,9 @@ show_status() {
         
         echo -e "\n${YELLOW}--- 健康检查 (API 响应头) ---${NC}"
         PSK=$(grep "^PSK=" "deploy/.env" | cut -d'=' -f2)
-        if curl -sI -H "X-Aether-PSK: $PSK" "http://localhost:8080/probe" | grep -q "200 OK"; then
-             echo -e "${GREEN}[OK] 网关探针响应正常 (Port 8080)${NC}"
-        elif curl -sI -H "X-Aether-PSK: $PSK" "http://localhost:80/probe" | grep -q "200 OK"; then
-             echo -e "${GREEN}[OK] 网关探针响应正常 (Port 80)${NC}"
+        PORT=$(grep "^CADDY_PORT=" "deploy/.env" | cut -d'=' -f2 | tr -d ':')
+        if curl -ksI -H "X-Aether-PSK: $PSK" "https://localhost:${PORT:-443}/probe" | grep -q "200 OK"; then
+             echo -e "${GREEN}[OK] Aether Backend 响应正常 (Port ${PORT:-443})${NC}"
         else
              echo -e "${RED}[WARN] 无法从本地回环确认 API 连通性，请检查 logs${NC}"
         fi
@@ -332,6 +331,30 @@ quick_config() {
     read -p "是否同步重启容器以应用配置? [y/N]: " RESTART_CONFIRM
     if [[ "$RESTART_CONFIRM" =~ ^[Yy]$ ]]; then
         docker compose -f deploy/docker-compose.yml up -d
+    fi
+}
+
+stop_service() {
+    echo -e "\n${YELLOW}正在暂停服务...${NC}"
+    if [ -f "deploy/docker-compose.yml" ]; then
+        docker compose -f deploy/docker-compose.yml stop
+        echo -e "${GREEN}服务已暂停。${NC}"
+    else
+        echo -e "${RED}错误: 未找到部署文件。${NC}"
+    fi
+}
+
+remove_service() {
+    echo -e "\n${YELLOW}正在极其彻底地清理旧环境...${NC}"
+    if [ -f "deploy/docker-compose.yml" ]; then
+        docker compose -f deploy/docker-compose.yml down -v
+        echo -e "${GREEN}Docker 容器与网络已清理。${NC}"
+    fi
+    # 清理旧的伪装目录与证书缓存
+    read -p "是否同时清理证书与伪装站点缓存? [y/N]: " CLEAN_CACHE
+    if [[ "$CLEAN_CACHE" =~ ^[Yy]$ ]]; then
+        rm -rf deploy/certs deploy/decoy
+        echo -e "${GREEN}证书与伪装站缓存已清空。${NC}"
     fi
 }
 
