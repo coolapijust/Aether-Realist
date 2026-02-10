@@ -126,7 +126,8 @@ func main() {
 
 	tlsConfig := &tls.Config{
 		GetCertificate: certLoader.GetCertificate,
-		NextProtos:     []string{http3.NextProtoH3},
+		NextProtos:     []string{"h3", "h3-29", "http/1.1"}, // Critical Fix: Explicit ALPN for compatibility
+		MinVersion:     tls.VersionTLS13,                    // Enforce TLS 1.3 for security
 	}
 
 	var tracer func(context.Context, logging.Perspective, quic.ConnectionID) *logging.ConnectionTracer
@@ -146,7 +147,8 @@ func main() {
 
 	quicConfig := &quic.Config{
 		EnableDatagrams:                true,
-		MaxIdleTimeout:                 60 * time.Second,
+		MaxIdleTimeout:                 30 * time.Second, // Reverted to default 30s per user request
+		KeepAlivePeriod:                10 * time.Second, // Active keep-alive
 		Allow0RTT:                      true,
 		MaxIncomingStreams:             1000,
 		InitialStreamReceiveWindow:     4 * 1024 * 1024,  // 4 MB (Initial)
