@@ -1,7 +1,7 @@
-# Aether-Realist Deployment Template (Protocol V5 Optimized)
+version: '3.8'
 
 services:
-  # 1. 业务网关 (Caddy v2) - 仅作为 ACME 证书申请工具
+  # 1. 证书管理器 (Caddy) - 仅作为 ACME 证书申请工具
   # 不再监听 80/443，避免端口冲突与性能损耗
   gateway:
     image: caddy:2-alpine
@@ -37,4 +37,3 @@ services:
 
 volumes:
   caddy_data:
-
