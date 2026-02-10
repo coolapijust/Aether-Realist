@@ -1,12 +1,9 @@
-version: '3.8'
-
 services:
   # 1. 证书管理器 (Caddy) - 仅作为 ACME 证书申请工具
-  # 不再监听 80/443，避免端口冲突与性能损耗
   gateway:
     image: caddy:2-alpine
     container_name: aether-cert-manager
-    restart: "no" # 只运行一次用于申请证书
+    restart: "no"
     environment:
       - DOMAIN=${DOMAIN}
       - TLS_CONFIG=${TLS_CONFIG}
@@ -14,7 +11,6 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - ./certs:/certs:rw
-    # 仅申请证书，不启动 Server
     command: caddy trust
 
   # 2. Aether 核心服务端 (Host 直连模式 + 多态伪装挂载)
@@ -25,15 +21,15 @@ services:
     network_mode: host
     environment:
       - PSK=${PSK}
-      - LISTEN_ADDR=${CADDY_PORT}  # 使用脚本决策的端口 (443/8080/Customize)
+      - LISTEN_ADDR=:${CADDY_PORT}  # 关键修复：补全冒号，格式为 :8080 或 :443
       - SSL_CERT_FILE=/certs/server.crt
       - SSL_KEY_FILE=/certs/server.key
-      - DECOY_ROOT=/decoy        # 指向容器内挂载点
+      - DECOY_ROOT=/decoy
     volumes:
       - ./certs:/certs:ro
-      - ${DECOY_PATH}:/decoy:ro  # 动态挂载伪装目录
+      - ${DECOY_PATH}:/decoy:ro
     cap_add:
-      - NET_ADMIN                # 允许内核调优 (BBR)
+      - NET_ADMIN
 
 volumes:
   caddy_data:

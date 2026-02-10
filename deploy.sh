@@ -244,7 +244,7 @@ EOF
     sed -i "/^TLS_CONFIG=/d" "$ENV_FILE"
     sed -i "/^DECOY_PATH=/d" "$ENV_FILE"
     echo "CADDY_SITE_ADDRESS=$CADDY_SITE_ADDRESS" >> "$ENV_FILE"
-    echo "CADDY_PORT=$CADDY_PORT" >> "$ENV_FILE"
+    echo "CADDY_PORT=${CADDY_PORT:-8080}" >> "$ENV_FILE"
     echo "TLS_CONFIG=$TLS_CONFIG" >> "$ENV_FILE"
     # 如果用户没指定本地路径，默认使用这里的 ./decoy
     echo "DECOY_PATH=${DECOY_PATH:-./decoy}" >> "$ENV_FILE"
