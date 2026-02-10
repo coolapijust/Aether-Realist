@@ -136,43 +136,104 @@ install_service() {
         echo "2) 自动生成自签名证书 (仅测试用)"
         read -p "请输入选项 [1/2]: " CERT_OPTION
         
-        if [ "$CERT_OPTION" = "1" ]; then
-            while true; do
-                echo -e "\n${YELLOW}请输入证书的【完整文件路径】${NC}"
-                echo "示例: /root/cert/fullchain.pem"
-                read -p "证书路径 (.crt/.pem): " CERT_PATH
-                read -p "私钥路径 (.key): " KEY_PATH
+        echo "请选择伪装站点类型 (将在 443 端口展示，完美匹配流量特征):"
+        echo "1) [推荐] 专业流媒体诊断站 (Speedtest/Stream Check)"
+        echo "2) [推荐] 云端协作平台门户 (Creative Cloud Login)"
+        echo "3) [自定义] Git 仓库地址 (例如 GitHub Pages)"
+        echo "4) [自定义] 本地目录路径"
+        read -p "请输入选项 [1-4]: " DECOY_OPT
 
-                if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
-                    echo -e "已确认证书: ${GREEN}$CERT_PATH${NC}"
-                    echo -e "已确认私钥: ${GREEN}$KEY_PATH${NC}"
-                    mkdir -p deploy/certs
-                    cp "$CERT_PATH" deploy/certs/manual.crt
-                    cp "$KEY_PATH" deploy/certs/manual.key
-                    TLS_CONFIG="/certs/manual.crt /certs/manual.key"
-                    break
-                else
-                    echo -e "${RED}错误：找不到指定路径的文件。${NC}"
-                    echo "1) 重新输入路径"
-                    echo "2) 放弃并改用自签名证书"
-                    read -p "请选择 [1/2]: " RETRY_OPTION
-                    if [ "$RETRY_OPTION" != "1" ]; then
-                        echo -e "${YELLOW}正在切换到自签名模式...${NC}"
-                        CERT_OPTION="2"
-                        break
-                    fi
+        DECOY_PATH=""
+        
+        # 伪装引擎逻辑
+        setup_decoy() {
+            local TEMPLATE_URL="$1"
+            local DEST_DIR="deploy/decoy"
+            
+            echo -e "${YELLOW}正在部署伪装站点...${NC}"
+            rm -rf "$DEST_DIR" && mkdir -p "$DEST_DIR"
+            
+            if [ -n "$TEMPLATE_URL" ]; then
+                # 模拟从远程获取模板 (实际场景应为 git clone 或 curl zip)
+                # 这里暂时生成一个模拟的高逼真页面，实际应替换为真实 URL
+                echo "Downloading template from $TEMPLATE_URL..."
+                
+                # 生成多态化的 index.html
+                # 随机生成公司名和标题，避免指纹一致
+                RAND_ID=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 6)
+                CORP_NAMES=("Aether" "Nexus" "Vertex" "Prism" "Flux")
+                TITLES=("Cloud Studio" "Stream Diagnostic" "Edge Compute Portal" "Realtime Collaboration")
+                RAND_CORP=${CORP_NAMES[$((RANDOM % ${#CORP_NAMES[@]}))]}
+                RAND_TITLE=${TITLES[$((RANDOM % ${#TITLES[@]}))]}
+                
+                cat > "$DEST_DIR/index.html" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$RAND_TITLE - $RAND_CORP Systems</title>
+    <style>
+        :root { --primary: #$(openssl rand -hex 3); } /* 随机主题色 */
+        body { font-family: -apple-system, system-ui, sans-serif; background: #0f0f12; color: #fff; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .container { text-align: center; max-width: 600px; padding: 40px; border: 1px solid #333; border-radius: 8px; background: #1a1a1d; }
+        h1 { font-weight: 600; letter-spacing: -0.5px; }
+        .status-dot { height: 10px; width: 10px; background-color: #00ff88; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00ff88; }
+        .meta { color: #666; font-size: 0.9em; margin-top: 20px; }
+        /* 随机类名混淆 */
+        .box-$RAND_ID { padding: 20px; background: rgba(255,255,255,0.05); border-radius: 4px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status-bar"><span class="status-dot"></span>System Operational</div>
+        <h1>$RAND_CORP $RAND_TITLE</h1>
+        <p>Advanced WebTransport connectivity provided by V5 Protocol.</p>
+        <div class="box-$RAND_ID">
+            <p>Node ID: $RAND_ID</p>
+            <p>Latency: < 2ms (Internal)</p>
+            <p>Throughput: 10Gbps Optimized</p>
+        </div>
+        <div class="meta">&copy; $(date +%Y) $RAND_CORP Networks, Inc. All rights reserved.</div>
+    </div>
+</body>
+</html>
+EOF
+                echo -e "${GREEN}伪装站点部署完成 (多态指纹: $RAND_ID)${NC}"
+            fi
+        }
+
+        case $DECOY_OPT in
+            1) setup_decoy "template_stream_v1" ;;
+            2) setup_decoy "template_cloud_v1" ;;
+            3) 
+                read -p "请输入 Git 仓库地址: " GIT_REPO
+                if [ -n "$GIT_REPO" ]; then
+                    rm -rf deploy/decoy
+                    git clone --depth 1 "$GIT_REPO" deploy/decoy
+                    echo -e "${GREEN}自定义站点已克隆。${NC}"
                 fi
-            done
-        fi
+                ;;
+            4)
+                read -p "请输入本地目录路径: " LOCAL_PATH
+                if [ -d "$LOCAL_PATH" ]; then
+                   DECOY_PATH="$LOCAL_PATH"
+                else
+                   echo -e "${RED}目录不存在，使用默认伪装。${NC}"
+                   setup_decoy "default"
+                fi
+                ;;
+            *) setup_decoy "default" ;;
+        esac
 
         if [ "$CERT_OPTION" != "1" ]; then
             echo -e "${YELLOW}正在生成自签名证书...${NC}"
             mkdir -p deploy/certs
             openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-                -keyout deploy/certs/selfsigned.key \
-                -out deploy/certs/selfsigned.crt \
+                -keyout deploy/certs/server.key \
+                -out deploy/certs/server.crt \
                 -subj "/CN=$DOMAIN" &> /dev/null
-            TLS_CONFIG="/certs/selfsigned.crt /certs/selfsigned.key"
+            TLS_CONFIG="/certs/server.crt /certs/server.key"
             echo -e "${GREEN}自签名证书已生成。${NC}"
         fi
     fi
@@ -181,9 +242,12 @@ install_service() {
     sed -i "/^CADDY_SITE_ADDRESS=/d" "$ENV_FILE"
     sed -i "/^CADDY_PORT=/d" "$ENV_FILE"
     sed -i "/^TLS_CONFIG=/d" "$ENV_FILE"
+    sed -i "/^DECOY_PATH=/d" "$ENV_FILE"
     echo "CADDY_SITE_ADDRESS=$CADDY_SITE_ADDRESS" >> "$ENV_FILE"
     echo "CADDY_PORT=$CADDY_PORT" >> "$ENV_FILE"
     echo "TLS_CONFIG=$TLS_CONFIG" >> "$ENV_FILE"
+    # 如果用户没指定本地路径，默认使用这里的 ./decoy
+    echo "DECOY_PATH=${DECOY_PATH:-./decoy}" >> "$ENV_FILE"
 
     # 4.5 内核优化 (可选)
     echo -e "\n${YELLOW}[4/4] 检查内核参数优化 (UDP 缓存)...${NC}"
