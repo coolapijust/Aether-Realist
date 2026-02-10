@@ -137,10 +137,13 @@ install_service() {
                 fi
 
                 for f in $FILES; do
-                    # 忽略扩展名，只看内容
+                    # 调试输出：正在检查文件
+                    # echo "正在检查: $f" 
                     if grep -q "BEGIN CERTIFICATE" "$f"; then
                         CERT_PATH="$f"
-                    elif grep -q "BEGIN.*PRIVATE KEY" "$f"; then
+                    # 使用宽容的正则匹配私钥 (RSA/EC/OPENSSL等)
+                    # 注意：有些 grep 需要 -E 启用正则，有些默认支持
+                    elif grep -E -q "BEGIN.*PRIVATE KEY" "$f"; then
                         KEY_PATH="$f"
                     fi
                 done
