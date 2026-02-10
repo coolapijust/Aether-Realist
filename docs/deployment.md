@@ -31,20 +31,37 @@ Aether-Realist 提供了高性能的 Docker 镜像，内置 HTTP/3 WebTransport 
 version: '3.8'
 
 services:
-  aether-gateway:
-    image: ghcr.io/coolapijust/aether-rea:latest
-    container_name: aether-gateway
+  # 1. 证书管理器 (Caddy) - 仅申请证书，已移除转发损耗
+  aether-cert-manager:
+    image: caddy:2-alpine
+    container_name: aether-cert-manager
+    restart: "no"
+    environment:
+      - DOMAIN=${DOMAIN}
+      - TLS_CONFIG=${TLS_CONFIG}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - ./certs:/certs:rw
+    command: caddy trust
+
+  # 2. 核心服务端 (Host 直连 + 多态伪装)
+  aether-gateway-core:
+    image: ghcr.io/coolapijust/aether-realist:main
+    container_name: aether-gateway-core
     restart: always
+    network_mode: host
     environment:
       - PSK=${PSK}
-      - DOMAIN=${DOMAIN}
-    ports:
-      - "8080:8080/udp"
-      - "8080:8080/tcp"
+      - LISTEN_ADDR=${CADDY_PORT} # 443/8080 自适应
+      - SSL_CERT_FILE=/certs/server.crt
+      - SSL_KEY_FILE=/certs/server.key
+      - DECOY_ROOT=/decoy
     volumes:
       - ./certs:/certs:ro
-    # 生产模式建议直接绑定正式证书
-    command: -cert /certs/fullchain.pem -key /certs/privkey.pem -psk "${PSK}"
+      - ${DECOY_PATH}:/decoy:ro # 动态挂载伪装目录
+    cap_add:
+      - NET_ADMIN
 ```
 
 ### 运行时参数说明
@@ -71,17 +88,23 @@ V5 引入了密钥生命周期管理。当单个 WebTransport 会话写入记录
 
 为了确保传输链路的极致安全，建议使用 Caddy 作为证书管理后端。
 
-### 方案：共享证书卷
+### 方案：极简 ACME 模式
 
-让 Caddy 负责证书的申领与自动续期，Gateway 通过共享卷读取证书文件。
+Caddy 不再作为反向代理，而是降级为纯粹的证书管理工具。
 
 **Caddyfile 配置示例:**
 ```caddy
+{
+    admin off
+}
+
 your-domain.com {
     tls your-email@example.com
-    # 仅作为证书来源，不进行协议层转发
+    respond "ACME Challenge Verification Endpoint" 200
 }
 ```
+
+此配置下，Caddy 仅在启动时运行一次以申请/更新证书，随后 Aether Backend 将直接读取证书文件并独占 443 端口，实现 **零转发损耗** 与 **0-RTT** 极速传输。
 
 ---
  
@@ -114,8 +137,11 @@ your-domain.com {
 `aether-gateway` 已针对云原生环境进行了高度适配，支持在 Fly.io、Cloudflare Container 等容器平台上运行。
 
 ### 核心优化特性
-1. **动态端口适配**：自动识别 `$PORT` 环境变量，无需手动映射内部端口。
-2. **零配置自启动**：在缺失本地存储或证书的环境下，程序将自动生成临时安全链路以保障服务可用性。
+1. **端口动态自愈**：脚本会自动检测 443 端口占用情况。若被 Nginx 占用，将自动引导至 8080 端口或用户指定端口，并自动配置 Backend 监听。
+2. **多态深度伪装 (Decoy Engine)**：
+    - **模板选择**：内置“流媒体诊断”、“云协作平台”等高逼真专业模板。
+    - **自定义接入**：支持 Git Clone 任意仓库或挂载本地目录作为伪装站。
+    - **所有权混淆**：自动随机化站点元数据（Title/CSS/Color），防止指纹被扫描识别。
 
 ### 部署要点
 - **协议限制**：务必确认平台已放行 **UDP** 流量，否则 WebTransport 无法建立连接。
