@@ -246,8 +246,16 @@ EOF
     echo "CADDY_SITE_ADDRESS=$CADDY_SITE_ADDRESS" >> "$ENV_FILE"
     echo "CADDY_PORT=${CADDY_PORT:-8080}" >> "$ENV_FILE"
     echo "TLS_CONFIG=$TLS_CONFIG" >> "$ENV_FILE"
-    # 如果用户没指定本地路径，默认使用这里的 ./decoy
     echo "DECOY_PATH=${DECOY_PATH:-./decoy}" >> "$ENV_FILE"
+    
+    # 路径对齐：确保后端能找到证书
+    if [ -f "deploy/certs/server.crt" ]; then
+        echo "CERT_FILE=/certs/server.crt" >> "$ENV_FILE"
+        echo "KEY_FILE=/certs/server.key" >> "$ENV_FILE"
+    else
+        echo "CERT_FILE=" >> "$ENV_FILE"
+        echo "KEY_FILE=" >> "$ENV_FILE"
+    fi
 
     # 4.5 内核优化 (可选)
     echo -e "\n${YELLOW}[4/4] 检查内核参数优化 (UDP 缓存)...${NC}"
@@ -275,10 +283,11 @@ show_status() {
         echo -e "\n${YELLOW}--- 健康检查 (API 响应头) ---${NC}"
         PSK=$(grep "^PSK=" "deploy/.env" | cut -d'=' -f2)
         PORT=$(grep "^CADDY_PORT=" "deploy/.env" | cut -d'=' -f2 | tr -d ':')
-        if curl -ksI -H "X-Aether-PSK: $PSK" "https://localhost:${PORT:-443}/probe" | grep -q "200 OK"; then
-             echo -e "${GREEN}[OK] Aether Backend 响应正常 (Port ${PORT:-443})${NC}"
+        if curl -ksI -H "X-Aether-PSK: $PSK" "https://localhost:${PORT:-8080}/probe" | grep -q "200 OK"; then
+             echo -e "${GREEN}[OK] Aether Backend 响应正常 (Port ${PORT:-8080})${NC}"
         else
              echo -e "${RED}[WARN] 无法从本地回环确认 API 连通性，请检查 logs${NC}"
+             echo -e "${YELLOW}提示: 如果您使用了非 443 端口，请确保防火墙已放行该端口。${NC}"
         fi
     else
         echo -e "${RED}未找到部署文件。${NC}"
