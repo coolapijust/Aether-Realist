@@ -106,11 +106,9 @@ install_service() {
     CADDY_SITE_ADDRESS=""
     TLS_CONFIG=""
 
-    if ! check_port 80 && ! check_port 443; then
-        echo -e "${GREEN}检测到 80/443 端口空闲，将启用自动 HTTPS (Let's Encrypt)。${NC}"
-        CADDY_SITE_ADDRESS="{$DOMAIN}"
+    if ! check_port 443; then
+        echo -e "${GREEN}检测到 443 端口空闲，将使用标准 HTTPS 端口。${NC}"
         CADDY_PORT="443"
-        TLS_CONFIG="internal" 
     else
         echo -e "${YELLOW}检测到 80/443 端口被占用。${NC}"
         
@@ -223,17 +221,20 @@ EOF
             *) setup_decoy "default" ;;
         esac
 
-        if [ "$CERT_OPTION" != "1" ]; then
-            echo -e "${YELLOW}正在生成自签名证书...${NC}"
+        # 证书生成逻辑：无论端口如何，如果没有证书，就生成
+        if [ ! -f "deploy/certs/server.crt" ]; then
+            echo -e "${YELLOW}正在生成 10 年期自签名证书...${NC}"
             mkdir -p deploy/certs
-            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
                 -keyout deploy/certs/server.key \
                 -out deploy/certs/server.crt \
                 -subj "/CN=$DOMAIN" &> /dev/null
             TLS_CONFIG="/certs/server.crt /certs/server.key"
             echo -e "${GREEN}自签名证书已生成。${NC}"
+        else
+            TLS_CONFIG="/certs/server.crt /certs/server.key"
+            echo -e "${GREEN}检测到现有证书，跳过生成。${NC}"
         fi
-    fi
 
     # 写入环境变量文件 (覆盖旧的配置)
     sed -i "/^CADDY_SITE_ADDRESS=/d" "$ENV_FILE"
