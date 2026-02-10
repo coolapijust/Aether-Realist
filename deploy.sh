@@ -255,8 +255,35 @@ EOF
         echo "KEY_FILE=" >> "$ENV_FILE"
     fi
 
+    cleanup_legacy() {
+        echo -e "\n${YELLOW}正在准备无缝升级 (环境自清理)...${NC}"
+        # 停止并移除旧版 Caddy 容器 (如果存在)
+        if docker ps -a --format '{{.Names}}' | grep -q "aether-cert-manager"; then
+            echo -e "${YELLOW}检测到旧版 Caddy 容器，正在移除以释放端口...${NC}"
+            docker stop aether-cert-manager >/dev/null 2>&1
+            docker rm aether-cert-manager >/dev/null 2>&1
+        fi
+        
+        # 停止并移除旧版 Backend 容器 (如果存在)
+        if docker ps -a --format '{{.Names}}' | grep -q "aether-gateway-core"; then
+            docker stop aether-gateway-core >/dev/null 2>&1
+            docker rm aether-gateway-core >/dev/null 2>&1
+        fi
+
+        # 清理旧的 Caddy 数据卷
+        if docker volume ls -q | grep -q "deploy_caddy_data"; then
+            docker volume rm deploy_caddy_data >/dev/null 2>&1
+        fi
+        
+        # 清理旧的 Caddyfile
+        [ -f "deploy/Caddyfile" ] && rm "deploy/Caddyfile"
+        echo -e "${GREEN}旧环境清理完成，准备接入 Host 直连模式。${NC}"
+    }
+
+    cleanup_legacy
+
     # 4.5 内核优化 (可选)
-    echo -e "\n${YELLOW}[4/4] 检查内核参数优化 (UDP 缓存)...${NC}"
+    echo -e "\n${YELLOW}[5/5] 检查内核参数优化 (UDP 缓存)...${NC}"
     RMEM_MAX=$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)
     if [ "$RMEM_MAX" -lt 16777216 ]; then
         echo -e "${YELLOW}检测到 UDP 接收缓冲区较小 ($RMEM_MAX)。${NC}"
@@ -270,7 +297,7 @@ EOF
 
     echo -e "\n${YELLOW}正在启动服务...${NC}"
     docker compose -f deploy/docker-compose.yml up -d
-    echo -e "${GREEN}服务启动成功！${NC}"
+    echo -e "${GREEN}服务升级启动成功！${NC}"
 }
 
 show_status() {
