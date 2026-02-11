@@ -18,6 +18,7 @@ COPY . .
 # Download dependencies
 # Force clean go.sum to avoid checksum mismatch due to platform differences
 RUN rm -f go.sum
+ENV GOTOOLCHAIN=auto
 RUN go mod tidy
 
 # Build the binary
