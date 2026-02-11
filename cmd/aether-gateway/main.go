@@ -202,9 +202,10 @@ func main() {
 
 	server := webtransport.Server{
 		H3: &http3.Server{
-			Addr:       *listenAddr,
-			TLSConfig:  tlsConfig,
-			QUICConfig: quicConfig,
+			Addr:            *listenAddr,
+			TLSConfig:       tlsConfig,
+			QUICConfig:      quicConfig,
+			EnableDatagrams: true,
 		},
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
