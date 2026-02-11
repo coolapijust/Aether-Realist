@@ -64,6 +64,10 @@ func (sm *sessionManager) initialize() error {
 	if sm.config.URL == "" {
 		return nil
 	}
+	if sm.config.RecordPayloadBytes > 0 {
+		applied := SetRecordPayloadBytes(sm.config.RecordPayloadBytes)
+		log.Printf("[DEBUG] V5.1 Config: record payload bytes=%d", applied)
+	}
 
 	parsed, err := url.Parse(sm.config.URL)
 	if err != nil {

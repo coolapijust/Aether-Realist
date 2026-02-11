@@ -37,34 +37,55 @@ const (
 )
 
 var (
-	// MaxRecordPayload controls data record chunk size and can be overridden by
-	// RECORD_PAYLOAD_BYTES at process start.
-	MaxRecordPayload = DefaultMaxRecordPayload
-	// PoolBufferSize tracks the required pooled buffer capacity.
-	PoolBufferSize = MaxRecordPayload + RecordHeaderLength + 32
+	// recordPayloadBytes stores current max data payload size per record.
+	recordPayloadBytes atomic.Int64
+	// poolBufferBytes stores current pooled buffer capacity.
+	poolBufferBytes atomic.Int64
 )
 
 func init() {
+	payload := DefaultMaxRecordPayload
 	if v := os.Getenv("RECORD_PAYLOAD_BYTES"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
-			// Keep bounds sane and protocol-safe.
-			if parsed < 1024 {
-				parsed = 1024
-			}
-			maxPayload := MaxRecordSize - RecordHeaderLength
-			if parsed > maxPayload {
-				parsed = maxPayload
-			}
-			MaxRecordPayload = parsed
+			payload = parsed
 		}
 	}
-	PoolBufferSize = MaxRecordPayload + RecordHeaderLength + 32
+	_ = SetRecordPayloadBytes(payload)
+}
+
+func clampRecordPayload(size int) int {
+	if size < 1024 {
+		size = 1024
+	}
+	maxPayload := MaxRecordSize - RecordHeaderLength
+	if size > maxPayload {
+		size = maxPayload
+	}
+	return size
+}
+
+// SetRecordPayloadBytes updates record payload and pool size atomically.
+func SetRecordPayloadBytes(size int) int {
+	normalized := clampRecordPayload(size)
+	recordPayloadBytes.Store(int64(normalized))
+	poolBufferBytes.Store(int64(normalized + RecordHeaderLength + 32))
+	return normalized
+}
+
+// GetMaxRecordPayload returns current max data payload size.
+func GetMaxRecordPayload() int {
+	return int(recordPayloadBytes.Load())
+}
+
+// GetPoolBufferSize returns current pooled buffer capacity.
+func GetPoolBufferSize() int {
+	return int(poolBufferBytes.Load())
 }
 
 var recordPool = sync.Pool{
 	New: func() interface{} {
 		// Pre-allocate buffer with enough capacity for a full record
-		return make([]byte, PoolBufferSize)
+		return make([]byte, GetPoolBufferSize())
 	},
 }
 
@@ -76,7 +97,7 @@ func GetBuffer() []byte {
 
 // PutBuffer returns a buffer to the pool.
 func PutBuffer(buf []byte) {
-	if cap(buf) < PoolBufferSize {
+	if cap(buf) < GetPoolBufferSize() {
 		return // Protection against resizing
 	}
 	recordPool.Put(buf[:0])

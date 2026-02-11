@@ -74,7 +74,7 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 	// V5.1 Optimization: Use pool for receiving records
 	var recordBytes []byte
 	isPooled := false
-	if int(totalLength) <= PoolBufferSize {
+	if int(totalLength) <= GetPoolBufferSize() {
 		recordBytes = GetBuffer()
 		recordBytes = recordBytes[:totalLength]
 		isPooled = true
@@ -174,8 +174,9 @@ func (rw *RecordReadWriter) Write(p []byte) (n int, err error) {
 
 	for len(src) > 0 {
 		chunkSize := len(src)
-		if chunkSize > MaxRecordPayload {
-			chunkSize = MaxRecordPayload
+		maxPayload := GetMaxRecordPayload()
+		if chunkSize > maxPayload {
+			chunkSize = maxPayload
 		}
 
 		chunk := src[:chunkSize]

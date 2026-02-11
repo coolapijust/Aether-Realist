@@ -21,6 +21,7 @@ type SessionConfig struct {
 	HttpProxyAddr  string         `json:"http_proxy_addr"`      // HTTP proxy listen address
 	DialAddr       string         `json:"dial_addr,omitempty"` // Override dial address (optional)
 	MaxPadding     int            `json:"max_padding,omitempty"` // 0-65535, default 0
+	RecordPayloadBytes int        `json:"record_payload_bytes,omitempty"` // data record payload size in bytes
 	AllowInsecure  bool           `json:"allow_insecure"`        // Skip TLS verification
 	Rotation       RotationConfig `json:"rotation,omitempty"`   // Session rotation policy
 	BypassCN       bool           `json:"bypass_cn"`             // Bypass China sites

@@ -128,6 +128,7 @@ export interface CoreConfig {
   http_proxy_addr: string;
   dial_addr?: string;
   max_padding: number;
+  record_payload_bytes?: number;
   allow_insecure?: boolean;
   rotation: {
     enabled: boolean;

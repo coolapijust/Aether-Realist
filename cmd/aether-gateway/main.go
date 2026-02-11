@@ -464,8 +464,9 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 				remaining := buf[:n]
 				for len(remaining) > 0 {
 					chunkSize := len(remaining)
-					if chunkSize > core.MaxRecordPayload {
-						chunkSize = core.MaxRecordPayload
+					maxPayload := core.GetMaxRecordPayload()
+					if chunkSize > maxPayload {
+						chunkSize = maxPayload
 					}
 					chunk := remaining[:chunkSize]
 					recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)

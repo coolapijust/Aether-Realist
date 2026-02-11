@@ -239,6 +239,19 @@ export default function Rules() {
                 sx={{ maxWidth: 200 }}
               />
 
+              <TextField
+                label="Record Payload Bytes"
+                type="number"
+                value={editingConfig.record_payload_bytes ?? 16384}
+                onChange={(e) =>
+                  updateEditingConfig({
+                    record_payload_bytes: Math.max(1024, parseInt(e.target.value || '16384'))
+                  })
+                }
+                helperText="Recommended: 4096 / 8192 / 16384"
+                sx={{ maxWidth: 240 }}
+              />
+
               <FormControlLabel
                 control={
                   <Switch

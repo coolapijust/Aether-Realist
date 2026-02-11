@@ -89,6 +89,7 @@ const defaultConfig: CoreConfig = {
   listen_addr: '127.0.0.1:1080',
   http_proxy_addr: '127.0.0.1:1081',
   max_padding: 128,
+  record_payload_bytes: 16384,
   rotation: {
     enabled: true,
     min_interval_ms: 5 * 60 * 1000,

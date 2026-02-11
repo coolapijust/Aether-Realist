@@ -15,6 +15,7 @@ func DefaultConfig() *SessionConfig {
 		ListenAddr:    "127.0.0.1:1080",
 		HttpProxyAddr: "127.0.0.1:1081",
 		MaxPadding:    128,
+		RecordPayloadBytes: DefaultMaxRecordPayload,
 		Rotation: RotationConfig{
 			Enabled:       true,
 			MinIntervalMs: 300000, // 5 min
