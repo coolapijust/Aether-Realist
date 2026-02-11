@@ -30,6 +30,7 @@ type sessionManager struct {
 	onEvent   func(Event)
 	metrics   *Metrics
 	nonceGen  *NonceGenerator // V5: Counter-based nonce generator
+	streamSeq uint64
 }
 
 // newSessionManager creates a new session manager.
@@ -109,7 +110,6 @@ func (sm *sessionManager) initialize() error {
 		InitialConnectionReceiveWindow: connWin,
 		MaxStreamReceiveWindow:         maxStreamWin,
 		MaxConnectionReceiveWindow:     maxConnWin,
-		MaxConnectionReceiveWindow:     maxConnWin,
 	}
 
 	// V5.1 Performance Fix: Create a dedicated UDP socket with massive buffers
@@ -123,7 +123,7 @@ func (sm *sessionManager) initialize() error {
 	if err != nil {
 		return fmt.Errorf("failed to bind local udp: %w", err)
 	}
-	
+
 	const bufSize = 32 * 1024 * 1024 // 32MB Read Buffer
 	if err := udpConn.SetReadBuffer(bufSize); err != nil {
 		log.Printf("Warning: Failed to set client UDP read buffer: %v", err)
@@ -136,27 +136,22 @@ func (sm *sessionManager) initialize() error {
 	tr := &quic.Transport{
 		Conn: udpConn,
 	}
-	
-	// Inject the transport via http3.RoundTripper
-	roundTripper := &http3.RoundTripper{
+
+	sm.dialer = &webtransport.Dialer{
 		TLSClientConfig: &tls.Config{
 			ServerName:         parsed.Hostname(),
 			NextProtos:         []string{http3.NextProtoH3},
 			InsecureSkipVerify: sm.config.AllowInsecure,
 		},
 		QUICConfig: quicConfig,
-		Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
-			// Resolve the target address manually to ensure we dial correctly
+		DialAddr: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+			// Resolve the target address manually to ensure we dial correctly.
 			udpAddr, err := net.ResolveUDPAddr("udp", addr)
 			if err != nil {
 				return nil, err
 			}
 			return tr.DialEarly(ctx, udpAddr, tlsCfg, cfg)
 		},
-	}
-
-	sm.dialer = &webtransport.Dialer{
-		RoundTripper: roundTripper,
 	}
 
 	if sm.config.AllowInsecure {
@@ -202,14 +197,14 @@ func (sm *sessionManager) connectLocked() error {
 
 	sm.session = session
 	sm.sessionID = generateSessionID()
-	
+
 	// V5: Initialize NonceGenerator for counter-based nonce
 	sm.nonceGen, err = NewNonceGenerator()
 	if err != nil {
 		_ = session.CloseWithError(0, "nonce generator failed")
 		return fmt.Errorf("nonce generator failed: %w", err)
 	}
-	
+
 	sm.metrics.RecordSessionStart()
 
 	// Emit event
@@ -262,7 +257,7 @@ func (sm *sessionManager) close(reason string) error {
 }
 
 // OpenStream opens a new stream and returns it with a synchronized counter.
-func (sm *sessionManager) OpenStream(ctx context.Context) (webtransport.Stream, uint64, error) {
+func (sm *sessionManager) OpenStream(ctx context.Context) (*webtransport.Stream, uint64, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -286,7 +281,8 @@ func (sm *sessionManager) OpenStream(ctx context.Context) (webtransport.Stream, 
 		}
 	}
 
-	return stream, uint64(stream.StreamID()), nil
+	sm.streamSeq++
+	return stream, sm.streamSeq, nil
 }
 
 // dialSession creates a new WebTransport session.
