@@ -1,6 +1,8 @@
-# Aether CLI Core 核心实现
+# Aether CLI 客户端（`cmd/aether-client`）
 
-该客户端以 SOCKS5 形式提供入站，并通过 WebTransport 将流量封装为 Aether-Realist 记录。
+该客户端提供本地 SOCKS5 入站，并通过 WebTransport 连接网关。
+
+> 说明：桌面端主路径是 `aetherd + GUI`。`cmd/aether-client` 是轻量 CLI 形态，适合脚本化和最小部署。
 
 ## 构建
 
@@ -55,3 +57,8 @@ go build -o aether-client ./cmd/aether-client
 - 后续请求将自动建立新 Session。
 
 这有助于对抗长连接的统计特征。
+
+## 与 `aetherd` 的差异
+
+- `aether-client`：单进程 SOCKS5 客户端，配置由命令行参数传入。
+- `aetherd`：包含 SOCKS5 + HTTP 代理、本地控制 API、规则引擎、系统代理接管与事件流，更适合 GUI 与长期运行。

@@ -1,123 +1,84 @@
-# Aether-Realist 协议定义（V5.1）
+# Aether-Realist 协议定义（V5.1，当前实现）
 
-> 状态：草案 (Draft)
+## 1. 传输层
 
-## 1. 术语与约定
+- 承载：WebTransport over HTTP/3
+- Record 是协议最小封装单位
+- 每条双向流首包必须是 `Metadata Record (0x01)`
 
-- **Record**：协议最小封装单元。
-- **Metadata Record**：每个双向流首条记录，用于描述目标地址与选项。
-- **Data Record**：载荷数据记录。
-- **Error Record**：服务端或客户端的错误返回记录。
-- **网络字节序**：所有多字节整数均为 Big Endian。
+## 2. Record 格式
 
-## 2. 传输与会话
+统一结构：
 
-- **承载层**：WebTransport over HTTP/3。
-- **无状态**：服务端仅在单个 WebTransport 会话范围内维护状态，关闭即释放。
-- **会话握手**：依赖 HTTP/3 + WebTransport 建立，不引入额外握手包。
-- **0-RTT 支持**：V5.1 版本 **开启 0-RTT** (Early Data)。为了防御重放攻击，协议内置了时间戳校验与单调计数器校验。
-    - **小颗粒切片 (16KB Slicing)**：应用层写入记录大小上限为 **16KB**。通过缩小加密块，降低了弱网环境下 AEAD 认证的队头阻塞 (HoL Blocking) 惩罚。
-    - **内存池化 (Buffer Pooling)**：在高吞吐模式下，客户端与服务端必须使用 `sync.Pool` 复用读写缓冲区，以防御 GC 风暴并保持极低的 RSS 占用。
+- `LengthPrefix`：4 字节（不含自身）
+- `Header`：30 字节
+- `Payload`：变长
+- `Padding`：变长
 
-## 2.1 握手状态机 (Handshake State Machine)
+Header 字段（Big Endian）：
 
-为了消除实现歧义并防止互等死锁，双方必须严格遵循以下状态机流转：
+- `Version(u8)`：当前为 `0x05`
+- `Type(u8)`：`Metadata/Data/Ping/Pong/Error`
+- `TimestampNano(u64)`
+- `PayloadLength(u32)`
+- `PaddingLength(u32)`
+- `SessionID(4B)`
+- `Counter(u64)`
 
-1.  **Client**: `OpenStream()` -> **立即发送** `Metadata Record` -> 等待 `Data Record` 或直接发送 `Data Record`。
-    *   *Client 不得等待 Server 的任何初始响应即可发送后续数据。*
-2.  **Server**: `AcceptStream()` -> **阻塞读取** `Metadata Record` -> 解析目标与路由 -> 建立连接/转发。
-    *   *Server 在收到完整 Metadata 前不得发送任何数据。如果验证失败，服务端应静默关闭连接。*
+## 3. 类型定义
 
-## 3. Record 帧结构
+- `0x01` Metadata Record
+- `0x02` Data Record
+- `0x03` Ping Record
+- `0x04` Pong Record
+- `0x7F` Error Record
 
-每条 Record 采用统一的封装格式，V5.1 协议头长度为 **30 字节**：
+## 4. 加密与密钥派生
 
-```
-0                   1                   2                   3
-0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+---------------------------------------------------------------+
-|                     Length Prefix (u32)                       |
-+---------------------------------------------------------------+
-| Version(u8) |  Type (u8) |                                    |
-+-------------+------------+                                    +
-|                     Timestamp Nano (u64)                      |
-+                          +------------------------------------+
-|                          |        Payload Length (u32)        |
-+--------------------------+------------------------------------+
-|                     Padding Length (u32)                      |
-+---------------------------------------------------------------+
-|                   Session ID (4B) | Ctr (8B)                  |
-+---------------------------------------------------------------+
-|                         Payload (var)                         |
-+---------------------------------------------------------------+
-|                         Padding (var)                         |
-+---------------------------------------------------------------+
-```
+### 4.1 Metadata 加密
 
-- **Length Prefix**：Record 的总长度（Header + Payload + Padding），不包含自身长度字段。
-- **Version**：协议版本，V5.1 必须为 `0x05` (保持兼容) 或协商的新版本号。
-- **Type**：Record 类型。
-- **Timestamp Nano**：发送端纳秒时间戳，用于防御重放。
-- **Payload Length**：载荷长度，V5.1 推荐值为 **16KB**，严禁超过 1MB。由于 AEAD 加密的不可分割性，16KB 是兼顾开销与抗丢包性能的最佳平衡点。
-- **Padding Length**：填充长度。
-    - **TypeData (0x02)**: V5.1 必须为 `0`。
-    - **TypeMetadata (0x01)**: 必须为随机值 (16-256 字节)。
-- **Session ID**：4 字节随机会话标识，仅在会话建立时生成；客户端与服务端必须使用 **不同的 Session ID**（每个方向独立），以确保双向流量的 Nonce 不会碰撞。
-- **Ctr**：8 字节单调递增计数器，每发送一个 Record 必须自增 1，初始值为 `0`。
+- 算法：`AES-128-GCM`
+- Key 派生：`HKDF-SHA256(psk, salt=SessionID, info="aether-realist-v5")`
+- Nonce：`SessionID(4B) || Counter(8B)`
+- AAD：完整 30B Header
+- Tag：16 字节
 
-### 3.1 Record 类型
+### 4.2 Data Record
 
-| Type | 名称             | 说明 |
-| ---- | ---------------- | ---- |
-| 0x01 | Metadata Record  | 首条记录，携带目标信息 + 选项（加密）。 |
-| 0x02 | Data Record      | 数据记录。 |
-| 0x03 | Ping Record      | 心跳探测。 |
-| 0x04 | Pong Record      | 心跳响应。 |
-| 0x7F | Error Record     | 错误返回。 |
+当前实现不对 Data payload 做 AEAD，仅做协议封装。
 
-## 4. Metadata Record
+- Data padding：`0`
+- Metadata padding：随机（握手混淆）
 
-### 4.2 加密
+## 5. 防重放
 
-Metadata Record 的 Payload 必须使用 `AES-128-GCM` 加密。
+接收端校验：
 
-- **Key Derivation (Zero-Sync V5.1)**：
-    - `PRK = HKDF-Extract(salt=SessionID, IKM=PSK)`。
-    - `Key = HKDF-Expand(PRK, info="aether-realist-v5", L=16)`。
-- **Nonce/IV**：`SessionID(4B) || Ctr(8B)` 拼接而成的 12 字节值；由于每个方向使用独立 Session ID，同一密钥下不会出现双向计数器冲突。
-- **AAD**：完整的 Record Header（30 字节）。通过将 Version 和 Timestamp 纳入 AAD，确保了协议头字段不可篡改。
-- **Authentication Tag**：固定 16 字节（128-bit），严禁截断。任何截断行为均视为协议违规，接收端必须拒绝处理。
+1. 时间戳窗口（默认 ±30s）
+2. Counter 单调递增（按流维护）
 
-## 5. 防重放机制 (Anti-Replay)
+不满足即判定无效流量，进入失败处理路径。
 
-服务端必须执行双重校验：
-1.  **时间窗口校验**：`|ServerTime - RecordTimestamp| < 30s`。
-2.  **计数器校验**：对每条流维护最后接收计数器值，若 `Ctr` 非严格递增则判定为重放攻击并丢弃。
+## 6. 分片与吞吐
 
-## 6. 密钥生命周期管理
+- 最大 Record 限制：`1MB`
+- Data payload 上限：`16KB`（`MaxRecordPayload`）
+- 写路径按 `16KB` 分片封装，可降低弱网 HoL 惩罚
 
-- **单 Session 最大加密次数**：每个 Session 最多加密 `2^32` 个 Record。
-- **达到阈值时**：客户端与服务端必须关闭当前 Session，客户端应立即重连以生成新的 Session ID 与密钥。
-- **阈值计算**：当发送端检测到 `Ctr >= 2^32` 时，必须立即停止发送并触发会话关闭与自动轮换流程。接收端应对超出阈值的计数器直接拒绝。
+## 7. 会话与轮换
 
-## 7. 流量混淆 (Traffic Chunking)
+- 每个会话有独立 `SessionID + Counter` 生成器
+- Counter 到阈值（`2^32`）需 rekey（轮换会话）
+- 客户端支持定时轮换与异常重建
 
-- **载荷特征对齐**：发送端应模拟实时流媒体（Real-time Streaming）或云端渲染（Cloud Rendering）的流量特征。
-- **16KB 动态切片**：V5.1 采用 **16KB 恒定切片**。发送端将应用层数据封装为加密 Record 写入 WebTransport 流。16KB 仅需约 12 个 UDP 包，有效降低了因单个子包丢失导致的整个 Record 解密停滞。
-- **动态接收窗口**：V5.1 弃用了固定的 4MB 接收窗口，恢复了 **32MB+** 的动态伸缩上限，以对齐现代 Chrome 浏览器行为并提供 BBR 探测空间。
-- **伪装端口行为**：
-    - **443 端口**：必须提供符合 HTTP/3 标准的 ALPN 协商。
-    - **非业务请求**：必须返回与伪装站点（Decoy Site）一致的静态资源或 404/403 响应，严禁暴露协议特有的错误码。
+## 8. 失败行为（当前实现）
 
-## 8. 错误处理与主动防御
+握手失败时，服务端采用统一失败策略：
 
-- **静默丢弃 (Silent Drop)**：对于非法版本、协议格式错误或认证失败的 Metadata 握手，服务端应直接关闭 Stream 引发“静默失败”，不得返回明文错误记录，以防止主动探测特征泄露。
-- **Error Record**：仅用于已建立连接后的业务逻辑错误反馈。
+- 记录安全日志
+- 随机短延迟
+- 写入随机诱饵字节
+- 关闭流
 
-### 8.1 握手失败的恒定时间处理
+该行为用于降低探测方对失败原因的可观测性。
 
-为对抗时序侧信道攻击，所有握手阶段错误必须遵循以下原则：
-
-1. **统一时延窗口**：解密失败、格式错误、时间戳非法、计数器错误等所有错误路径必须在相同的时间范围内断开连接。
-2. **禁止早期中止**：即使检测到格式错误，也应完整读取 Record 后再执行统一延迟断开。
-3. **统一错误路径**：所有握手错误必须汇聚到同一处理函数，避免日志或行为泄露错误类型差异。

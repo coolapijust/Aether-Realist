@@ -11,8 +11,11 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/hkdf"
@@ -29,11 +32,34 @@ const (
 	TypeError          = 0x7f
 	MaxRecordSize      = 1 * 1024 * 1024
 	MaxCounterValue    = uint64(1 << 32) // 2^32 rekey threshold
-	// V5.1 Optimization: Smaller chunks reduce AEAD HoL Blocking on slow links
-	MaxRecordPayload   = 16 * 1024
-	// PoolBufferSize = Payload + Header + AEAD Overhead (approx 16.5KB)
-	PoolBufferSize     = MaxRecordPayload + RecordHeaderLength + 32 
+	// DefaultMaxRecordPayload is the default data record chunk size.
+	DefaultMaxRecordPayload = 16 * 1024
 )
+
+var (
+	// MaxRecordPayload controls data record chunk size and can be overridden by
+	// RECORD_PAYLOAD_BYTES at process start.
+	MaxRecordPayload = DefaultMaxRecordPayload
+	// PoolBufferSize tracks the required pooled buffer capacity.
+	PoolBufferSize = MaxRecordPayload + RecordHeaderLength + 32
+)
+
+func init() {
+	if v := os.Getenv("RECORD_PAYLOAD_BYTES"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			// Keep bounds sane and protocol-safe.
+			if parsed < 1024 {
+				parsed = 1024
+			}
+			maxPayload := MaxRecordSize - RecordHeaderLength
+			if parsed > maxPayload {
+				parsed = maxPayload
+			}
+			MaxRecordPayload = parsed
+		}
+	}
+	PoolBufferSize = MaxRecordPayload + RecordHeaderLength + 32
+}
 
 var recordPool = sync.Pool{
 	New: func() interface{} {
@@ -103,8 +129,7 @@ type Record struct {
 // NonceGenerator generates unique nonces using SessionID + monotonic counter.
 type NonceGenerator struct {
 	sessionID [4]byte
-	counter   uint64
-	mu        sync.Mutex
+	counter   atomic.Uint64
 }
 
 // NewNonceGenerator creates a new NonceGenerator with a random SessionID.
@@ -119,20 +144,20 @@ func NewNonceGenerator() (*NonceGenerator, error) {
 // Next returns the next nonce (12 bytes) and the current counter value.
 // Returns ErrCounterExhausted if the counter reaches MaxCounterValue.
 func (ng *NonceGenerator) Next() ([12]byte, uint64, error) {
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
+	for {
+		current := ng.counter.Load()
+		if current >= MaxCounterValue {
+			return [12]byte{}, 0, ErrCounterExhausted
+		}
+		if !ng.counter.CompareAndSwap(current, current+1) {
+			continue
+		}
 
-	if ng.counter >= MaxCounterValue {
-		return [12]byte{}, 0, ErrCounterExhausted
+		var nonce [12]byte
+		copy(nonce[0:4], ng.sessionID[:])
+		binary.BigEndian.PutUint64(nonce[4:12], current)
+		return nonce, current, nil
 	}
-
-	var nonce [12]byte
-	copy(nonce[0:4], ng.sessionID[:])
-	binary.BigEndian.PutUint64(nonce[4:12], ng.counter)
-
-	currentCounter := ng.counter
-	ng.counter++
-	return nonce, currentCounter, nil
 }
 
 // SessionID returns the session ID.
@@ -142,9 +167,7 @@ func (ng *NonceGenerator) SessionID() [4]byte {
 
 // Counter returns the current counter value (for monitoring).
 func (ng *NonceGenerator) Counter() uint64 {
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-	return ng.counter
+	return ng.counter.Load()
 }
 
 const (

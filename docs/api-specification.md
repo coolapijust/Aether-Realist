@@ -1,122 +1,139 @@
-# Aether-Realist API 规范指南
+# Aether-Realist API 规范（aetherd）
 
-Aether-Realist Core (`aetherd`) 提供了一套基于 HTTP (REST) 和 WebSocket 的本地控制 API，允许 GUI 客户端或自动化脚本管理连接、监控指标并实时接收系统事件。
+默认监听：`127.0.0.1:9880`
 
-默认情况下，API 服务器监听在 `127.0.0.1:9880`。
+- REST Base: `http://127.0.0.1:9880/api/v1`
+- Events: `ws://127.0.0.1:9880/api/v1/events`
 
----
+## 1. REST API
 
-## 1. REST API (v1)
+### 1.1 状态
 
-所有 API 响应均采用标准 JSON 格式。
+#### `GET /status`
 
-### 核心状态管理
+返回核心状态与摘要信息。
 
-#### `GET /api/v1/status`
-获取当前 Core 的运行状态。
-- **响应示例**:
-  ```json
-  {
-    "state": "Active",
-    "config": { ... },
-    "active_streams": 12,
-    "proxy_enabled": true,
-    "rules_count": 5,
-    "last_error": ""
-  }
-  ```
+示例：
 
-#### `POST /api/v1/control/start`
-使用当前配置启动核心服务。
-- **请求体**: 空
-- **响应**: `{"status": "started"}`
-
-#### `POST /api/v1/control/stop`
-停止核心服务。
-- **响应**: `{"status": "stopped"}`
-
-#### `POST /api/v1/control/rotate`
-手动触发会话轮换（Reconnect）。
-- **响应**: `{"status": "rotating"}`
-
----
-
-### 配置与规则
-
-#### `GET /api/v1/config`
-读取当前生效的持久化配置。
-
-#### `POST /api/v1/config`
-更新并保存配置到磁盘。
-- **请求体参数**:
-  - `url`: Gateway 连接串 (如 `https://host:port/path`)
-  - `psk`: 预共享密钥
-  - `listen_addr`: SOCKS5 监听地址
-  - `http_proxy_addr`: HTTP 代理监听地址
-  - `allow_insecure`: 是否跳过证书验证 (Boolean)
-  - `bypass_cn`: 国内直连 (Boolean)
-  - `block_ads`: 广告拦截 (Boolean)
-
-#### `POST /api/v1/control/proxy`
-快捷开启/关闭系统代理。
-- **请求体**: `{"enabled": true}`
-
----
-
-### 监控与诊断
-
-#### `GET /api/v1/metrics`
-获取当前的流量统计快照。
-- **响应字段**: `sessionUptime`, `bytesSent`, `bytesReceived`, `latencyMs` 等。
-
-#### `GET /api/v1/streams`
-列出所有活跃的 TCP 流详情。
-
----
-
-## 2. WebSocket 事件流 (v1)
-
-### 连接地址
-`ws://127.0.0.1:9880/api/v1/events`
-
-### 订阅机制
-建立连接后，服务端会主动推送 Core 产生的所有事件。
-
-### 事件类型示例
-
-#### 核心状态变更 (`core.stateChanged`)
 ```json
 {
-  "type": "core.stateChanged",
-  "from": "Starting",
-  "to": "Active",
-  "timestamp": 1707312345
+  "state": "Active",
+  "config": {},
+  "active_streams": 2,
+  "proxy_enabled": true,
+  "rules_count": 3,
+  "last_error": ""
 }
 ```
 
-#### 指标快照 (`metrics.snapshot`)
-每秒推送一次实时流量数据。
+### 1.2 配置
+
+#### `GET /config`
+
+读取当前配置（`SessionConfig`）。
+
+#### `POST /config`
+
+更新配置并持久化。常用字段：
+
+- `url`
+- `psk`
+- `listen_addr`
+- `http_proxy_addr`
+- `dial_addr`
+- `max_padding`
+- `allow_insecure`
+- `bypass_cn`
+- `block_ads`
+- `window_profile` (`conservative` / `normal` / `aggressive`)
+- `rotation`
+- `rules`
+
+成功返回：
+
 ```json
-{
-  "type": "metrics.snapshot",
-  "bytesSent": 1048576,
-  "bytesReceived": 5242880,
-  "activeStreams": 3,
-  "timestamp": 1707312350
-}
+{"status":"updated"}
 ```
 
-#### 系统日志 (`app.log`)
+### 1.3 规则
+
+#### `GET /rules`
+获取规则列表。
+
+#### `POST /rules`
+整体更新规则列表。
+
+### 1.4 运行控制
+
+#### `POST /control/start`
+启动 Core（使用当前配置）。
+
+#### `POST /control/stop`
+停止 Core。
+
+#### `POST /control/rotate`
+触发会话轮换。
+
+#### `POST /control/proxy`
+
+切换系统代理：
+
 ```json
-{
-  "type": "app.log",
-  "level": "info",
-  "message": "Connected to upstream gateway",
-  "source": "core"
-}
+{"enabled": true}
 ```
 
-### 客户端指令
-可以通过 WebSocket 发送心跳：
-- **发送**: `{"action": "ping"}`
-- **接收**: `{"type": "pong"}`
+响应：
+
+```json
+{"status":"success","enabled":true}
+```
+
+### 1.5 观测接口
+
+#### `GET /streams`
+返回活动流列表。
+
+#### `GET /metrics`
+返回当前指标快照（等价于一次 `metrics.snapshot` 事件）。
+
+## 2. WebSocket 事件流
+
+连接地址：`/api/v1/events`
+
+服务端推送事件对象（JSON），典型类型：
+
+- `core.stateChanged`
+- `session.established`
+- `session.rotating`
+- `session.closed`
+- `stream.opened`
+- `stream.closed`
+- `core.error`
+- `metrics.snapshot`
+- `rotation.scheduled`
+- `rotation.prewarm.started`
+- `rotation.completed`
+- `app.log`
+
+### 2.1 客户端心跳
+
+客户端可发送：
+
+```json
+{"action":"ping"}
+```
+
+服务端响应：
+
+```json
+{"type":"pong"}
+```
+
+## 3. 错误语义
+
+- 非法方法：`405 Method Not Allowed`
+- 请求体错误：`400 Bad Request`
+- Core 操作失败：`500 Internal Server Error`
+
+建议 GUI/自动化调用按 HTTP 状态码处理，不依赖响应文本做逻辑判断。
+
