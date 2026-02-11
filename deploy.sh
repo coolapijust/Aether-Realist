@@ -496,13 +496,27 @@ quick_config() {
     echo -e "\n${YELLOW}=== 快捷参数修改 ===${NC}"
     echo "1) 修改 PSK"
     echo "2) 修改 域名 (DOMAIN)"
-    read -p "请输入 [1/2]: " CFG_OPT
+    echo "3) 修改 监听端口 (PORT)"
+    read -p "请输入 [1/2/3]: " CFG_OPT
     if [ "$CFG_OPT" = "1" ]; then
         read -p "新 PSK: " NEW_PSK
-        [ -n "$NEW_PSK" ] && sed -i "s/^PSK=.*/PSK=$NEW_PSK/" "$ENV_FILE"
+        [ -n "$NEW_PSK" ] && sed -i "s/^PSK=.*/PSK='$NEW_PSK'/" "$ENV_FILE"
     elif [ "$CFG_OPT" = "2" ]; then
         read -p "新域名: " NEW_DOM
-        [ -n "$NEW_DOM" ] && sed -i "s/^DOMAIN=.*/DOMAIN=$NEW_DOM/" "$ENV_FILE"
+        [ -n "$NEW_DOM" ] && sed -i "s/^DOMAIN=.*/DOMAIN='$NEW_DOM'/" "$ENV_FILE"
+    elif [ "$CFG_OPT" = "3" ]; then
+        read -p "新端口 (如 443 或 8443): " NEW_PORT
+        if [ -n "$NEW_PORT" ]; then
+            sed -i "/^CADDY_PORT=/d" "$ENV_FILE"
+            echo "CADDY_PORT=$NEW_PORT" >> "$ENV_FILE"
+            # 同步更新 CADDY_SITE_ADDRESS
+            sed -i "/^CADDY_SITE_ADDRESS=/d" "$ENV_FILE"
+            if [ "$NEW_PORT" = "443" ]; then
+                echo "CADDY_SITE_ADDRESS=" >> "$ENV_FILE"
+            else
+                echo "CADDY_SITE_ADDRESS=:$NEW_PORT" >> "$ENV_FILE"
+            fi
+        fi
     fi
     echo -e "${GREEN}配置已更新。${NC}"
     read -p "是否同步重启容器以应用配置? [y/N]: " RESTART_CONFIRM
