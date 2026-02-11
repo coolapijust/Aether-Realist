@@ -247,6 +247,8 @@ EOF
     echo "DECOY_PATH=${DECOY_PATH:-./decoy}" >> "$ENV_FILE"
     
     # 路径对齐：确保后端能找到证书
+    sed -i "/^CERT_FILE=/d" "$ENV_FILE"
+    sed -i "/^KEY_FILE=/d" "$ENV_FILE"
     if [ -f "deploy/certs/server.crt" ]; then
         echo "CERT_FILE=/certs/server.crt" >> "$ENV_FILE"
         echo "KEY_FILE=/certs/server.key" >> "$ENV_FILE"
