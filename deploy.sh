@@ -313,28 +313,25 @@ EOF
     fi
 
     cleanup_legacy() {
-        echo -e "\n${YELLOW}正在准备无缝升级 (环境自清理)...${NC}"
-        # 停止并移除旧版 Caddy 容器 (如果存在)
+        echo -e "\n${YELLOW}正在准备无缝升级 (环境检查)...${NC}"
+        # 仅清理真的已经废弃的组件 (早于 V5 的版本)
         if docker ps -a --format '{{.Names}}' | grep -q "aether-cert-manager"; then
-            echo -e "${YELLOW}检测到旧版 Caddy 容器，正在移除以释放端口...${NC}"
-            docker stop aether-cert-manager >/dev/null 2>&1
-            docker rm aether-cert-manager >/dev/null 2>&1
+            echo -e "${YELLOW}清理旧版证书管理器...${NC}"
+            docker stop aether-cert-manager >/dev/null 2>&1 || true
+            docker rm aether-cert-manager >/dev/null 2>&1 || true
         fi
         
-        # 停止并移除旧版 Backend 容器 (如果存在)
-        if docker ps -a --format '{{.Names}}' | grep -q "aether-gateway-core"; then
-            docker stop aether-gateway-core >/dev/null 2>&1
-            docker rm aether-gateway-core >/dev/null 2>&1
-        fi
-
+        # 不要手动删除 aether-gateway-core，让 docker compose up -d 处理“覆盖更新”
+        # 这样可以减少停机时间并避免某些 Race Condition
+        
         # 清理旧的 Caddy 数据卷
         if docker volume ls -q | grep -q "deploy_caddy_data"; then
-            docker volume rm deploy_caddy_data >/dev/null 2>&1
+            docker volume rm deploy_caddy_data >/dev/null 2>&1 || true
         fi
         
-        # 清理旧的 Caddyfile (防止 Docker 自动创建的同名目录导致挂载失败)
+        # 清理旧的 Caddyfile 目录/文件
         [ -e "deploy/Caddyfile" ] && rm -rf "deploy/Caddyfile"
-        echo -e "${GREEN}旧环境清理完成，准备接入 Host 直连模式。${NC}"
+        echo -e "${GREEN}环境检查完成。${NC}"
     }
 
     cleanup_legacy
@@ -352,12 +349,41 @@ EOF
         fi
     fi
 
+    # 智能端口占用解决 (针对优雅更新的补充)
+    resolve_port_conflict() {
+        local TARGET_PORT=$1
+        if check_port "$TARGET_PORT"; then
+            echo -e "${YELLOW}检测到端口 $TARGET_PORT 被占用。正在分析进程...${NC}"
+            local PID_INFO=$(lsof -i :$TARGET_PORT -t 2>/dev/null || fuser $TARGET_PORT/tcp 2>/dev/null | awk '{print $NF}')
+            
+            if [ -n "$PID_INFO" ]; then
+                local PROCESS_NAME=$(ps -p $PID_INFO -o comm= 2>/dev/null || echo "未知进程")
+                echo -e "${RED}警告: 端口 $TARGET_PORT 正被进程 [${PROCESS_NAME}] (PID: $PID_INFO) 占用。${NC}"
+                
+                # 如果是本项目容器，提示覆盖，否则警示
+                if [[ "$PROCESS_NAME" == *"docker"* ]]; then
+                    echo -e "${GREEN}提示: 这是一个容器进程，Docker Compose 将会在接下来的步骤中尝试自动替换它。${NC}"
+                else
+                    read -p "是否强制结束此进程并抢占端口? [y/N]: " KILL_CONFIRM
+                    if [[ "$KILL_CONFIRM" =~ ^[Yy]$ ]]; then
+                        echo -e "${YELLOW}正在释放端口...${NC}"
+                        kill -9 $PID_INFO 2>/dev/null || sudo kill -9 $PID_INFO 2>/dev/null
+                    else
+                        echo -e "${RED}操作取消，启动可能会失败。${NC}"
+                    fi
+                fi
+            fi
+        fi
+    }
+
+    resolve_port_conflict "${CADDY_PORT:-443}"
+
     echo -e "\n${YELLOW}正在获取最新镜像 (V5.1 Optimized)...${NC}"
     docker compose -f deploy/docker-compose.yml pull
     
-    echo -e "\n${YELLOW}正在启动服务...${NC}"
-    docker compose -f deploy/docker-compose.yml up -d
-    echo -e "${GREEN}服务同步/升级成功，已运行 Aether V5.1 核心！${NC}"
+    echo -e "\n${YELLOW}正在启动服务 (覆盖式更新)...${NC}"
+    docker compose -f deploy/docker-compose.yml up -d --remove-orphans
+    echo -e "${GREEN}服务同步/升级完成！已实现无缝切换。${NC}"
 }
 
 show_status() {
