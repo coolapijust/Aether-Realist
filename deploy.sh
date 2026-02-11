@@ -79,6 +79,19 @@ check_self_update() {
 # 执行自动更新检查
 check_self_update "$1"
 
+# 校验 record payload 大小，返回 0 表示合法
+validate_record_payload_size() {
+    local VALUE="$1"
+    if [[ ! "$VALUE" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    # 允许范围: 1024 ~ 262144
+    if [ "$VALUE" -lt 1024 ] || [ "$VALUE" -gt 262144 ]; then
+        return 1
+    fi
+    return 0
+}
+
 # 核心逻辑函数
 install_service() {
     echo -e "\n${YELLOW}[1/4] 环境检查...${NC}"
@@ -109,6 +122,7 @@ install_service() {
     CURRENT_PSK=$(grep "^PSK=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_DOMAIN=$(grep "^DOMAIN=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_CADDY_PORT=$(grep "^CADDY_PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
+    CURRENT_RECORD_PAYLOAD=$(grep "^RECORD_PAYLOAD_BYTES=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
 
     # 过滤默认占位符 (防止 .env.example 的值被误用)
     if [ "$CURRENT_PSK" = "your_super_secret_token" ]; then
@@ -116,6 +130,18 @@ install_service() {
     fi
     if [ "$CURRENT_DOMAIN" = "your-domain.com" ]; then
         CURRENT_DOMAIN=""
+    fi
+
+    # RECORD_PAYLOAD_BYTES: 推荐 4096/8192/16384，默认 16384
+    DEFAULT_RECORD_PAYLOAD=16384
+    if validate_record_payload_size "$CURRENT_RECORD_PAYLOAD"; then
+        DEFAULT_RECORD_PAYLOAD="$CURRENT_RECORD_PAYLOAD"
+    fi
+    read -p "设置 RECORD_PAYLOAD_BYTES [4096/8192/16384] (默认: $DEFAULT_RECORD_PAYLOAD): " RECORD_PAYLOAD_INPUT
+    RECORD_PAYLOAD_BYTES=${RECORD_PAYLOAD_INPUT:-$DEFAULT_RECORD_PAYLOAD}
+    if ! validate_record_payload_size "$RECORD_PAYLOAD_BYTES"; then
+        echo -e "${YELLOW}输入无效，回退为默认值 16384。${NC}"
+        RECORD_PAYLOAD_BYTES=16384
     fi
 
     # 交互输入 PSK
@@ -333,6 +359,7 @@ EOF
     sed -i "/^HOST_KEY_PATH=/d" "$ENV_FILE"
     sed -i "/^CERT_FILE=/d" "$ENV_FILE"
     sed -i "/^KEY_FILE=/d" "$ENV_FILE"
+    sed -i "/^RECORD_PAYLOAD_BYTES=/d" "$ENV_FILE"
 
     echo "CADDY_SITE_ADDRESS=$CADDY_SITE_ADDRESS" >> "$ENV_FILE"
     echo "CADDY_PORT=${CADDY_PORT:-8080}" >> "$ENV_FILE"
@@ -343,6 +370,7 @@ EOF
     # 保存容器内路径供 APP 使用
     echo "CERT_FILE=$CONTAINER_CERT_PATH" >> "$ENV_FILE"
     echo "KEY_FILE=$CONTAINER_KEY_PATH" >> "$ENV_FILE"
+    echo "RECORD_PAYLOAD_BYTES=$RECORD_PAYLOAD_BYTES" >> "$ENV_FILE"
     
     # 生成 Docker Compose 配置
     echo -e "${YELLOW}生成 Docker Compose 配置...${NC}"
@@ -587,7 +615,8 @@ quick_config() {
     echo "1) 修改 PSK"
     echo "2) 修改 域名 (DOMAIN)"
     echo "3) 修改 监听端口 (PORT)"
-    read -p "请输入 [1/2/3]: " CFG_OPT
+    echo "4) 修改 Record Payload (RECORD_PAYLOAD_BYTES)"
+    read -p "请输入 [1/2/3/4]: " CFG_OPT
     if [ "$CFG_OPT" = "1" ]; then
         read -p "新 PSK: " NEW_PSK
         [ -n "$NEW_PSK" ] && sed -i "s/^PSK=.*/PSK='$NEW_PSK'/" "$ENV_FILE"
@@ -606,6 +635,20 @@ quick_config() {
             else
                 echo "CADDY_SITE_ADDRESS=:$NEW_PORT" >> "$ENV_FILE"
             fi
+        fi
+    elif [ "$CFG_OPT" = "4" ]; then
+        CURRENT_RECORD_PAYLOAD=$(grep "^RECORD_PAYLOAD_BYTES=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
+        if ! validate_record_payload_size "$CURRENT_RECORD_PAYLOAD"; then
+            CURRENT_RECORD_PAYLOAD=16384
+        fi
+        read -p "新 RECORD_PAYLOAD_BYTES (推荐 4096/8192/16384, 当前 $CURRENT_RECORD_PAYLOAD): " NEW_RECORD_PAYLOAD
+        NEW_RECORD_PAYLOAD=${NEW_RECORD_PAYLOAD:-$CURRENT_RECORD_PAYLOAD}
+        if validate_record_payload_size "$NEW_RECORD_PAYLOAD"; then
+            sed -i "/^RECORD_PAYLOAD_BYTES=/d" "$ENV_FILE"
+            echo "RECORD_PAYLOAD_BYTES=$NEW_RECORD_PAYLOAD" >> "$ENV_FILE"
+        else
+            echo -e "${RED}无效值，已取消修改。请输入 1024-262144 的整数。${NC}"
+            return 1
         fi
     fi
     echo -e "${GREEN}配置已更新。${NC}"
