@@ -107,7 +107,11 @@ func main() {
 	}
 	// Normalize PSK (Trim whitespace to avoid common config issues)
 	*psk = strings.TrimSpace(*psk)
-	log.Printf("Config: PSK loaded and normalized")
+	if len(*psk) > 4 {
+		log.Printf("Config: PSK loaded (Length: %d, Prefix: %s...)", len(*psk), (*psk)[:4])
+	} else {
+		log.Printf("Config: PSK loaded (Length: %d)", len(*psk))
+	}
 
 	// Initialize Certificate Loader for hot-reloading
 	certLoader, err := NewCertificateLoader(*certFile, *keyFile)

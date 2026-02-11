@@ -54,7 +54,7 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 		return nil, errors.New("invalid record length")
 	}
 	if totalLength > MaxRecordSize {
-		return nil, errors.New("record length exceeds max")
+		return nil, errors.New("handshake failed: potential PSK mismatch or server defense triggered (record length exceeds max)")
 	}
 
 	recordBytes := make([]byte, totalLength)

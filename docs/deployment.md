@@ -140,6 +140,36 @@ docker compose -f deploy/docker-compose.yml up -d --force-recreate
 ```
 
 ---
+
+## 5. 客户端连接故障排查 (Silent Connectivity)
+
+如果客户端无法连接且服务端日志无报错，通常是 **UDP 端口被阻断** 或 **证书不信任**。
+
+### 1. 检查 UDP 端口与防火墙
+
+运行状态检查命令：
+```bash
+./deploy.sh status
+```
+
+**关注输出中的以下部分：**
+```
+--- 网络与防火墙检查 (QUIC/HTTP3) ---
+[OK] UDP 端口 443 监听正常
+[WARN] UFW 防火墙已开启。请确保放行 UDP 端口：
+      sudo ufw allow 443/udp
+```
+**注意**：很多云厂商（AWS/GCP/Aliyun）的安全组默认只放行 TCP。**必须显式放行 UDP 443 (或您自定义的端口)**。
+
+### 2. 客户端证书验证
+
+如果您使用的是**自签名证书**（默认生成），客户端必须跳过证书验证才能连接。
+
+- **Desktop GUI**: 勾选 `Allow Insecure` 或 `Skip Verify`。
+- **CLI**: 增加 `--insecure` 参数。
+
+
+---
  
  ## 4. 性能调优 (Kernel Tuning)
  
