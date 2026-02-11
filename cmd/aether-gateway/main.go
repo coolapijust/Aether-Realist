@@ -130,7 +130,9 @@ func main() {
 
 	tlsConfig := &tls.Config{
 		GetCertificate: certLoader.GetCertificate,
-		NextProtos:     []string{"h3", "h3-29", "http/1.1"}, // Critical Fix: Explicit ALPN for compatibility
+		// QUIC listener should advertise only HTTP/3 ALPN.
+		// Mixing legacy h3 drafts or HTTP/1.1 here can cause capability negotiation ambiguity.
+		NextProtos: []string{http3.NextProtoH3},
 		MinVersion:     tls.VersionTLS13,                    // Enforce TLS 1.3 for security
 	}
 
@@ -209,6 +211,7 @@ func main() {
 		},
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
+	log.Printf("WebTransport capability: H3 datagrams enabled=%v, QUIC datagrams enabled=%v", server.H3.EnableDatagrams, quicConfig.EnableDatagrams)
 	// V5: ReplayCache removed - using counter-based anti-replay
 
 	http.HandleFunc(*secretPath, func(w http.ResponseWriter, r *http.Request) {
