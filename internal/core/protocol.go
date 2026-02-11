@@ -97,6 +97,7 @@ type Record struct {
 	SessionID     []byte
 	Counter       uint64
 	ErrorMessage  string
+	RawBuffer     []byte // Original pooled buffer for later release
 }
 
 // NonceGenerator generates unique nonces using SessionID + monotonic counter.

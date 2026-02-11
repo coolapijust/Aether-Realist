@@ -16,9 +16,8 @@
 - **无状态**：服务端仅在单个 WebTransport 会话范围内维护状态，关闭即释放。
 - **会话握手**：依赖 HTTP/3 + WebTransport 建立，不引入额外握手包。
 - **0-RTT 支持**：V5.1 版本 **开启 0-RTT** (Early Data)。为了防御重放攻击，协议内置了时间戳校验与单调计数器校验。
-- **V5.1 优化**：
-    - **移除强制填充 (No Data Padding)**：传输数据记录时不再添加随机填充，最大化吞吐量。
-    - **动态切片 (Dynamic Slicing)**：应用层写入记录大小上限为 **64KB** (匹配 AEAD 最佳块大小)，底层由 QUIC 负责分包。
+    - **小颗粒切片 (16KB Slicing)**：应用层写入记录大小上限为 **16KB**。通过缩小加密块，降低了弱网环境下 AEAD 认证的队头阻塞 (HoL Blocking) 惩罚。
+    - **内存池化 (Buffer Pooling)**：在高吞吐模式下，客户端与服务端必须使用 `sync.Pool` 复用读写缓冲区，以防御 GC 风暴并保持极低的 RSS 占用。
 
 ## 2.1 握手状态机 (Handshake State Machine)
 
@@ -59,7 +58,7 @@
 - **Version**：协议版本，V5.1 必须为 `0x05` (保持兼容) 或协商的新版本号。
 - **Type**：Record 类型。
 - **Timestamp Nano**：发送端纳秒时间戳，用于防御重放。
-- **Payload Length**：载荷长度，V5.1 建议最大 64KB。
+- **Payload Length**：载荷长度，V5.1 推荐值为 **16KB**，严禁超过 1MB。由于 AEAD 加密的不可分割性，16KB 是兼顾开销与抗丢包性能的最佳平衡点。
 - **Padding Length**：填充长度。
     - **TypeData (0x02)**: V5.1 必须为 `0`。
     - **TypeMetadata (0x01)**: 必须为随机值 (16-256 字节)。
@@ -104,7 +103,8 @@ Metadata Record 的 Payload 必须使用 `AES-128-GCM` 加密。
 ## 7. 流量混淆 (Traffic Chunking)
 
 - **载荷特征对齐**：发送端应模拟实时流媒体（Real-time Streaming）或云端渲染（Cloud Rendering）的流量特征。
-- **动态切片 (Dynamic Slicing)**：V5.1 弃用了随机大小切片，改为 **64KB 动态切片**。发送端将应用层数据封装为最大 64KB 的加密 Record 写入 WebTransport 流，底层由 QUIC 协议栈根据 Path MTU（约 1350 字节）自动分包，兼顾加密效率与网络适应性。
+- **16KB 动态切片**：V5.1 采用 **16KB 恒定切片**。发送端将应用层数据封装为加密 Record 写入 WebTransport 流。16KB 仅需约 12 个 UDP 包，有效降低了因单个子包丢失导致的整个 Record 解密停滞。
+- **动态接收窗口**：V5.1 弃用了固定的 4MB 接收窗口，恢复了 **32MB+** 的动态伸缩上限，以对齐现代 Chrome 浏览器行为并提供 BBR 探测空间。
 - **伪装端口行为**：
     - **443 端口**：必须提供符合 HTTP/3 标准的 ALPN 协商。
     - **非业务请求**：必须返回与伪装站点（Decoy Site）一致的静态资源或 404/403 响应，严禁暴露协议特有的错误码。

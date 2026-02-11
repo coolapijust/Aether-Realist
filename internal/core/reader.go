@@ -10,8 +10,9 @@ import (
 
 // RecordReader reads records from a stream.
 type RecordReader struct {
-	reader io.Reader
-	stash  []byte
+	reader        io.Reader
+	stash         []byte
+	currentRecord *Record // Keep track of pooled buffer
 }
 
 // NewRecordReader creates a new record reader with a 1MB buffer.
@@ -31,13 +32,27 @@ func (r *RecordReader) Read(p []byte) (int, error) {
 			return 0, errors.New("server error: " + record.ErrorMessage)
 		}
 		if record.Type != TypeData {
-			continue
+			// Non-data records: put buffer back immediately as we won't stash it
+			if record.RawBuffer != nil {
+				PutBuffer(record.RawBuffer)
+			}
+			continue // No recursive call, use loop
 		}
 		r.stash = record.Payload
+		// IMPORTANT: we keep record.RawBuffer until stash is fully consumed
+		r.currentRecord = record
 	}
 
 	n := copy(p, r.stash)
 	r.stash = r.stash[n:]
+	
+	if len(r.stash) == 0 && r.currentRecord != nil {
+		// Stash exhausted, release the pooled buffer
+		if r.currentRecord.RawBuffer != nil {
+			PutBuffer(r.currentRecord.RawBuffer)
+		}
+		r.currentRecord = nil
+	}
 	return n, nil
 }
 
@@ -56,8 +71,21 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 		return nil, errors.New("handshake failed: potential PSK mismatch or server defense triggered (record length exceeds max)")
 	}
 
-	recordBytes := make([]byte, totalLength)
+	// V5.1 Optimization: Use pool for receiving records
+	var recordBytes []byte
+	isPooled := false
+	if totalLength <= PoolBufferSize {
+		recordBytes = GetBuffer()
+		recordBytes = recordBytes[:totalLength]
+		isPooled = true
+	} else {
+		recordBytes = make([]byte, totalLength)
+	}
+
 	if _, err := io.ReadFull(r.reader, recordBytes); err != nil {
+		if isPooled {
+			PutBuffer(recordBytes)
+		}
 		return nil, err
 	}
 
@@ -97,6 +125,11 @@ func (r *RecordReader) ReadNextRecord() (*Record, error) {
 		Header:        header,
 		SessionID:     sessionID,
 		Counter:       counter,
+		RawBuffer:     recordBytes, // Store for later release
+	}
+	if !isPooled {
+		// If not pooled, RawBuffer is nil to prevent putting non-pool items
+		result.RawBuffer = nil
 	}
 	if recordType == TypeError {
 		if len(payload) >= 4 {
@@ -154,10 +187,10 @@ func (rw *RecordReadWriter) Write(p []byte) (n int, err error) {
 			return totalWritten, err
 		}
 		
-		// V5.1 Note: record is now a pooled buffer from BuildDataRecord
-		defer PutBuffer(record)
-
+		// V5.1 Critical Fix: Do NOT use defer in loop.
+		// Release pooled buffer immediately after writing to the stream.
 		_, err = rw.writer.Write(record)
+		PutBuffer(record)
 		if err != nil {
 			return totalWritten, err
 		}
