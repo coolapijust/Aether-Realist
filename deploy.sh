@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Aether-Realist V5 一键部署脚本
+# Aether-Realist V5.1 一键部署脚本
 # 适用环境：Ubuntu/Debian/CentOS (Linux x64)
 
 set -e
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}==============================================${NC}"
-echo -e "${GREEN}    Aether-Realist V5 一键部署工具          ${NC}"
+echo -e "${GREEN}    Aether-Realist V5.1 一键部署工具          ${NC}"
 echo -e "${GREEN}==============================================${NC}"
 
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/main"
@@ -352,9 +352,12 @@ EOF
         fi
     fi
 
+    echo -e "\n${YELLOW}正在获取最新镜像 (V5.1 Optimized)...${NC}"
+    docker compose -f deploy/docker-compose.yml pull
+    
     echo -e "\n${YELLOW}正在启动服务...${NC}"
     docker compose -f deploy/docker-compose.yml up -d
-    echo -e "${GREEN}服务升级启动成功！${NC}"
+    echo -e "${GREEN}服务同步/升级成功，已运行 Aether V5.1 核心！${NC}"
 }
 
 show_status() {
