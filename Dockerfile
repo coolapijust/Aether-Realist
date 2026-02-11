@@ -6,6 +6,7 @@ WORKDIR /app
 # Install git for go mod
 RUN apk add --no-cache git
 
+
 # Copy go mod and sum files
 COPY go.mod ./
 # go.sum might not exist if deleted, but copy if it does
