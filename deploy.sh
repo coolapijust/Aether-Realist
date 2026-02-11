@@ -28,6 +28,7 @@ download_file() {
         echo -e "已备份旧的 ${YELLOW}$FILE_PATH${NC} 为 ${YELLOW}${FILE_PATH}.bak${NC}"
     fi
 
+    
     if [ ! -f "$FILE_PATH" ]; then
         echo -e "正在从 GitHub 获取/更新 ${YELLOW}$FILE_PATH${NC}..."
         mkdir -p "$(dirname "$FILE_PATH")"
@@ -39,6 +40,44 @@ download_file() {
         fi
     fi
 }
+
+# 自我更新功能
+check_self_update() {
+    # 防止递归更新死循环
+    if [ "$1" == "--no-update" ]; then
+        return
+    fi
+
+    echo -e "${YELLOW}正在检查部署脚本更新...${NC}"
+    local SELF_URL="$GITHUB_RAW_BASE/deploy.sh"
+    local TEMP_SCRIPT="/tmp/deploy.sh.tmp"
+    
+    # 下载最新脚本
+    if curl -sL "$SELF_URL?$(date +%s)" -o "$TEMP_SCRIPT"; then
+        # 简单校验：且确保文件非空
+        if [ -s "$TEMP_SCRIPT" ] && grep -q "Aether-Realist" "$TEMP_SCRIPT"; then
+            # 比较差异
+            if ! cmp -s "$TEMP_SCRIPT" "$0"; then
+                echo -e "${GREEN}发现新版本！正在自动更新并重启脚本...${NC}"
+                chmod +x "$TEMP_SCRIPT"
+                mv "$TEMP_SCRIPT" "$0"
+                # 使用 exec 替换当前进程，并带上防递归参数
+                exec "$0" --no-update "$@"
+            else
+                echo -e "脚本已是最新。"
+                rm -f "$TEMP_SCRIPT"
+            fi
+        else
+            echo -e "${RED}更新校验失败，跳过。${NC}"
+            rm -f "$TEMP_SCRIPT"
+        fi
+    else
+        echo -e "${RED}检查更新失败，继续使用当前版本。${NC}"
+    fi
+}
+
+# 执行自动更新检查
+check_self_update "$1"
 
 # 核心逻辑函数
 install_service() {
