@@ -80,6 +80,8 @@ type gatewayPerfStats struct {
 	tcpToWTBuildNanos atomic.Uint64
 	tcpToWTFlushCalls atomic.Uint64
 	tcpToWTFlushBytes atomic.Uint64
+	tcpToWTChunkCapBytes atomic.Uint64
+	tcpToWTCoalesceWaitMicros atomic.Uint64
 }
 
 var gwPerf gatewayPerfStats
@@ -120,6 +122,15 @@ func (s *gatewayPerfStats) observeTCPFlush(bytes int) {
 	s.tcpToWTFlushBytes.Add(uint64(bytes))
 }
 
+func (s *gatewayPerfStats) observeTCPAdaptive(chunkCap int, coalesceWait time.Duration) {
+	if chunkCap > 0 {
+		s.tcpToWTChunkCapBytes.Add(uint64(chunkCap))
+	}
+	if coalesceWait > 0 {
+		s.tcpToWTCoalesceWaitMicros.Add(uint64(coalesceWait.Microseconds()))
+	}
+}
+
 func startGatewayPerfReporter() {
 	if os.Getenv("PERF_DIAG_ENABLE") != "1" {
 		return
@@ -142,6 +153,7 @@ func startGatewayPerfReporter() {
 		var prevTCPReadWaitCalls, prevTCPReadWaitNanos uint64
 		var prevTCPBuildCalls, prevTCPBuildNanos uint64
 		var prevTCPFlushCalls, prevTCPFlushBytes uint64
+		var prevTCPChunkCapBytes, prevTCPCoalesceWaitMicros uint64
 
 		for range ticker.C {
 			curWTToTCPBytes := gwPerf.wtToTCPBytes.Load()
@@ -156,6 +168,8 @@ func startGatewayPerfReporter() {
 			curTCPBuildNanos := gwPerf.tcpToWTBuildNanos.Load()
 			curTCPFlushCalls := gwPerf.tcpToWTFlushCalls.Load()
 			curTCPFlushBytes := gwPerf.tcpToWTFlushBytes.Load()
+			curTCPChunkCapBytes := gwPerf.tcpToWTChunkCapBytes.Load()
+			curTCPCoalesceWaitMicros := gwPerf.tcpToWTCoalesceWaitMicros.Load()
 
 			dWTToTCPBytes := curWTToTCPBytes - prevWTToTCPBytes
 			dWTToTCPWrites := curWTToTCPWrites - prevWTToTCPWrites
@@ -169,12 +183,15 @@ func startGatewayPerfReporter() {
 			dTCPBuildNanos := curTCPBuildNanos - prevTCPBuildNanos
 			dTCPFlushCalls := curTCPFlushCalls - prevTCPFlushCalls
 			dTCPFlushBytes := curTCPFlushBytes - prevTCPFlushBytes
+			dTCPChunkCapBytes := curTCPChunkCapBytes - prevTCPChunkCapBytes
+			dTCPCoalesceWaitMicros := curTCPCoalesceWaitMicros - prevTCPCoalesceWaitMicros
 
 			prevWTToTCPBytes, prevWTToTCPWrites, prevWTToTCPNanos = curWTToTCPBytes, curWTToTCPWrites, curWTToTCPNanos
 			prevTCPToWTBytes, prevTCPToWTWrites, prevTCPToWTNanos = curTCPToWTBytes, curTCPToWTWrites, curTCPToWTNanos
 			prevTCPReadWaitCalls, prevTCPReadWaitNanos = curTCPReadWaitCalls, curTCPReadWaitNanos
 			prevTCPBuildCalls, prevTCPBuildNanos = curTCPBuildCalls, curTCPBuildNanos
 			prevTCPFlushCalls, prevTCPFlushBytes = curTCPFlushCalls, curTCPFlushBytes
+			prevTCPChunkCapBytes, prevTCPCoalesceWaitMicros = curTCPChunkCapBytes, curTCPCoalesceWaitMicros
 
 			sec := interval.Seconds()
 			ulMbps := float64(dWTToTCPBytes*8) / 1_000_000.0 / sec
@@ -206,13 +223,20 @@ func startGatewayPerfReporter() {
 			if dTCPFlushCalls > 0 {
 				flushAvgBytes = float64(dTCPFlushBytes) / float64(dTCPFlushCalls)
 			}
+			chunkCapAvgBytes := 0.0
+			coalesceWaitAvgUs := 0.0
+			if dTCPFlushCalls > 0 {
+				chunkCapAvgBytes = float64(dTCPChunkCapBytes) / float64(dTCPFlushCalls)
+				coalesceWaitAvgUs = float64(dTCPCoalesceWaitMicros) / float64(dTCPFlushCalls)
+			}
 			log.Printf(
-				"[PERF-GW2] window=%s dl_stage{read_wait_us=%.1f reads=%d build_us=%.1f builds=%d write_block_us=%.1f writes=%d flush_avg_bytes=%.1f flushes=%d}",
+				"[PERF-GW2] window=%s dl_stage{read_wait_us=%.1f reads=%d build_us=%.1f builds=%d write_block_us=%.1f writes=%d flush_avg_bytes=%.1f flushes=%d chunk_cap_avg_bytes=%.1f coalesce_wait_avg_us=%.1f}",
 				interval,
 				readWaitUs, dTCPReadWaitCalls,
 				buildUs, dTCPBuildCalls,
 				dlWriteUs, dTCPToWTWrites,
 				flushAvgBytes, dTCPFlushCalls,
+				chunkCapAvgBytes, coalesceWaitAvgUs,
 			)
 		}
 	}()
@@ -641,6 +665,7 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 		if maxFlushThreshold > core.MaxRecordSize-core.RecordHeaderLength {
 			maxFlushThreshold = core.MaxRecordSize - core.RecordHeaderLength
 		}
+		dynamicChunkCap := maxPayload
 		adjustAdaptive := func(writeDur time.Duration, chunkSize int) {
 			if !adaptiveEnabled {
 				return
@@ -648,39 +673,41 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 			writeUs := float64(writeDur.Nanoseconds()) / 1000.0
 			switch {
 			case writeUs > 12000:
+				if coalesceWait > minCoalesceWait {
+					coalesceWait -= 1 * time.Millisecond
+					if coalesceWait < minCoalesceWait {
+						coalesceWait = minCoalesceWait
+					}
+				}
+				if flushThreshold > minFlushThreshold {
+					flushThreshold -= 1024
+					if flushThreshold < minFlushThreshold {
+						flushThreshold = minFlushThreshold
+					}
+				}
+				if dynamicChunkCap > minFlushThreshold {
+					dynamicChunkCap -= 1024
+					if dynamicChunkCap < minFlushThreshold {
+						dynamicChunkCap = minFlushThreshold
+					}
+				}
+			case writeUs < 3000:
 				if coalesceWait < maxCoalesceWait {
-					coalesceWait += 2 * time.Millisecond
+					coalesceWait += 1 * time.Millisecond
 					if coalesceWait > maxCoalesceWait {
 						coalesceWait = maxCoalesceWait
 					}
 				}
 				if flushThreshold < maxFlushThreshold {
-					flushThreshold += 1024
+					flushThreshold += 512
 					if flushThreshold > maxFlushThreshold {
 						flushThreshold = maxFlushThreshold
 					}
 				}
-			case writeUs < 3000:
-				// If writes are fast but chunks are tiny, aggregate a bit more.
-				if chunkSize < maxPayload/2 {
-					if coalesceWait < maxCoalesceWait {
-						coalesceWait += 1 * time.Millisecond
-						if coalesceWait > maxCoalesceWait {
-							coalesceWait = maxCoalesceWait
-						}
-					}
-				} else {
-					if coalesceWait > minCoalesceWait {
-						coalesceWait -= 1 * time.Millisecond
-						if coalesceWait < minCoalesceWait {
-							coalesceWait = minCoalesceWait
-						}
-					}
-				}
-				if flushThreshold > minFlushThreshold && chunkSize >= flushThreshold/2 {
-					flushThreshold -= 512
-					if flushThreshold < minFlushThreshold {
-						flushThreshold = minFlushThreshold
+				if chunkSize >= dynamicChunkCap/2 && dynamicChunkCap < maxPayload {
+					dynamicChunkCap += 512
+					if dynamicChunkCap > maxPayload {
+						dynamicChunkCap = maxPayload
 					}
 				}
 			}
@@ -690,11 +717,16 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 		flushPending := func() error {
 			for len(pending) > 0 {
 				chunkSize := len(pending)
-				if chunkSize > maxPayload {
-					chunkSize = maxPayload
+				chunkCap := maxPayload
+				if adaptiveEnabled && dynamicChunkCap > 0 && dynamicChunkCap < chunkCap {
+					chunkCap = dynamicChunkCap
+				}
+				if chunkSize > chunkCap {
+					chunkSize = chunkCap
 				}
 				chunk := pending[:chunkSize]
 				gwPerf.observeTCPFlush(chunkSize)
+				gwPerf.observeTCPAdaptive(chunkCap, coalesceWait)
 				buildStart := time.Now()
 				recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)
 				if buildErr != nil {
