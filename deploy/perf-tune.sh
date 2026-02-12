@@ -286,6 +286,11 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
         gw2_flush_avg_bytes_sum += (s[7] + 0)
         gw2_flushes_sum += (s[8] + 0)
       }
+      match(\$0, /dl_stage\{.*chunk_cap_avg_bytes=([0-9.]+).*coalesce_wait_avg_us=([0-9.]+)/, t) {
+        gw2_chunk_cap_avg_bytes_sum += (t[1] + 0)
+        gw2_coalesce_wait_avg_us_sum += (t[2] + 0)
+        gw2_tuned_points++
+      }
       END {
         printf "points_total=%d\n", n_core + n_gw
         if (n_core > 0) {
@@ -316,6 +321,10 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
           printf "gw2_avg_writes=%.1f\n", gw2_writes_sum / n_gw2
           printf "gw2_avg_flush_bytes=%.1f\n", gw2_flush_avg_bytes_sum / n_gw2
           printf "gw2_avg_flushes=%.1f\n", gw2_flushes_sum / n_gw2
+          if (gw2_tuned_points > 0) {
+            printf "gw2_avg_chunk_cap_avg_bytes=%.1f\n", gw2_chunk_cap_avg_bytes_sum / gw2_tuned_points
+            printf "gw2_avg_coalesce_wait_avg_us=%.1f\n", gw2_coalesce_wait_avg_us_sum / gw2_tuned_points
+          }
         }
         if (n_core == 0 && n_gw == 0) {
           print "points=0"
