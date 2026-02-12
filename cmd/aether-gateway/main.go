@@ -681,84 +681,144 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 		}()
 
 		maxPayload := core.GetMaxRecordPayload()
-		coalesceWait := 5 * time.Millisecond
-		if v := os.Getenv("TCP_TO_WT_COALESCE_MS"); v != "" {
-			if ms, pErr := strconv.Atoi(v); pErr == nil && ms >= 0 && ms <= 200 {
-				coalesceWait = time.Duration(ms) * time.Millisecond
-			}
-		}
-		// Flush threshold controls when we stop waiting for more small TCP reads.
-		flushThreshold := maxPayload
-		if v := os.Getenv("TCP_TO_WT_FLUSH_THRESHOLD"); v != "" {
-			if parsed, pErr := strconv.Atoi(v); pErr == nil && parsed >= 1024 && parsed <= core.MaxRecordSize-core.RecordHeaderLength {
-				flushThreshold = parsed
-			}
-		}
 		adaptiveEnabled := true
 		if v := os.Getenv("TCP_TO_WT_ADAPTIVE"); v != "" {
 			adaptiveEnabled = v == "1" || strings.EqualFold(v, "true")
 		}
+		parseIntEnv := func(name string, fallback, min, max int) int {
+			v := os.Getenv(name)
+			if v == "" {
+				return fallback
+			}
+			parsed, err := strconv.Atoi(v)
+			if err != nil {
+				return fallback
+			}
+			if parsed < min {
+				return min
+			}
+			if parsed > max {
+				return max
+			}
+			return parsed
+		}
+		parseDurMs := func(name string, fallback, min, max time.Duration) time.Duration {
+			v := os.Getenv(name)
+			if v == "" {
+				return fallback
+			}
+			parsed, err := strconv.Atoi(v)
+			if err != nil {
+				return fallback
+			}
+			d := time.Duration(parsed) * time.Millisecond
+			if d < min {
+				return min
+			}
+			if d > max {
+				return max
+			}
+			return d
+		}
 		const (
-			minCoalesceWait = 2 * time.Millisecond
-			maxCoalesceWait = 8 * time.Millisecond
+			defaultTargetWriteUs = 20000.0
 		)
-		minChunkCap := 12 * 1024
-		if minChunkCap > maxPayload {
-			minChunkCap = maxPayload
+		minChunkCap := parseIntEnv("TCP_TO_WT_SCHED_MIN_CHUNK", 4096, 1024, maxPayload)
+		maxChunkCap := parseIntEnv("TCP_TO_WT_SCHED_MAX_CHUNK", maxPayload, minChunkCap, maxPayload)
+		baseCoalesceWait := parseDurMs("TCP_TO_WT_COALESCE_MS", 3*time.Millisecond, 0, 200*time.Millisecond)
+		targetWriteUs := defaultTargetWriteUs
+		if v := os.Getenv("TCP_TO_WT_SCHED_TARGET_WRITE_US"); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				if parsed < 3000 {
+					parsed = 3000
+				}
+				if parsed > 200000 {
+					parsed = 200000
+				}
+				targetWriteUs = float64(parsed)
+			}
 		}
-		minFlushThreshold := minChunkCap
-		maxFlushThreshold := maxPayload * 2
-		if maxFlushThreshold > core.MaxRecordSize-core.RecordHeaderLength {
-			maxFlushThreshold = core.MaxRecordSize - core.RecordHeaderLength
+		flushThreshold := parseIntEnv("TCP_TO_WT_FLUSH_THRESHOLD", maxChunkCap, minChunkCap, core.MaxRecordSize-core.RecordHeaderLength)
+		if flushThreshold > maxChunkCap {
+			flushThreshold = maxChunkCap
 		}
-		if flushThreshold < minFlushThreshold {
-			flushThreshold = minFlushThreshold
+		type schedState string
+		const (
+			schedNormal    schedState = "normal"
+			schedRecovery  schedState = "recovery"
+			schedCongested schedState = "congested"
+		)
+		type sendScheduler struct {
+			state        schedState
+			targetWrite  float64
+			ewmaWriteUs  float64
+			chunkCap     int
+			flushTarget  int
+			coalesceWait time.Duration
 		}
-		dynamicChunkCap := maxPayload
-		adjustAdaptive := func(writeDur time.Duration, chunkSize int) {
+		sched := &sendScheduler{
+			state:        schedNormal,
+			targetWrite:  targetWriteUs,
+			chunkCap:     flushThreshold,
+			flushTarget:  flushThreshold,
+			coalesceWait: baseCoalesceWait,
+		}
+		if !adaptiveEnabled {
+			sched.chunkCap = flushThreshold
+			sched.flushTarget = flushThreshold
+			sched.coalesceWait = baseCoalesceWait
+		}
+		clampChunk := func(v int) int {
+			if v < minChunkCap {
+				return minChunkCap
+			}
+			if v > maxChunkCap {
+				return maxChunkCap
+			}
+			return v
+		}
+		adjustScheduler := func(writeDur time.Duration, chunkSize int) {
+			writeUs := float64(writeDur.Nanoseconds()) / 1000.0
+			if sched.ewmaWriteUs == 0 {
+				sched.ewmaWriteUs = writeUs
+			} else {
+				const alpha = 0.20
+				sched.ewmaWriteUs = sched.ewmaWriteUs*(1-alpha) + writeUs*alpha
+			}
 			if !adaptiveEnabled {
 				return
 			}
-			writeUs := float64(writeDur.Nanoseconds()) / 1000.0
+
 			switch {
-			case writeUs > 12000:
-				if coalesceWait > minCoalesceWait {
-					coalesceWait -= 1 * time.Millisecond
-					if coalesceWait < minCoalesceWait {
-						coalesceWait = minCoalesceWait
-					}
+			case sched.ewmaWriteUs > sched.targetWrite*2.0:
+				sched.state = schedCongested
+				sched.chunkCap = clampChunk(sched.chunkCap - 2048)
+				sched.flushTarget = sched.chunkCap
+				sched.coalesceWait = 2 * time.Millisecond
+			case sched.ewmaWriteUs > sched.targetWrite*1.2:
+				sched.state = schedRecovery
+				sched.chunkCap = clampChunk(sched.chunkCap - 1024)
+				sched.flushTarget = sched.chunkCap
+				if sched.coalesceWait > 2*time.Millisecond {
+					sched.coalesceWait -= 1 * time.Millisecond
 				}
-				if flushThreshold > minFlushThreshold {
-					flushThreshold -= 1024
-					if flushThreshold < minFlushThreshold {
-						flushThreshold = minFlushThreshold
-					}
+			case sched.ewmaWriteUs < sched.targetWrite*0.7:
+				sched.state = schedNormal
+				if chunkSize >= sched.chunkCap/2 {
+					sched.chunkCap = clampChunk(sched.chunkCap + 512)
 				}
-				if dynamicChunkCap > minChunkCap {
-					dynamicChunkCap -= 1024
-					if dynamicChunkCap < minChunkCap {
-						dynamicChunkCap = minChunkCap
-					}
+				sched.flushTarget = sched.chunkCap
+				if sched.coalesceWait < baseCoalesceWait+2*time.Millisecond {
+					sched.coalesceWait += 1 * time.Millisecond
 				}
-			case writeUs < 3000:
-				if coalesceWait < maxCoalesceWait {
-					coalesceWait += 1 * time.Millisecond
-					if coalesceWait > maxCoalesceWait {
-						coalesceWait = maxCoalesceWait
-					}
-				}
-				if flushThreshold < maxFlushThreshold {
-					flushThreshold += 512
-					if flushThreshold > maxFlushThreshold {
-						flushThreshold = maxFlushThreshold
-					}
-				}
-				if chunkSize >= dynamicChunkCap/2 && dynamicChunkCap < maxPayload {
-					dynamicChunkCap += 512
-					if dynamicChunkCap > maxPayload {
-						dynamicChunkCap = maxPayload
-					}
-				}
+			default:
+				// keep current state and tune
+			}
+			if sched.coalesceWait < 2*time.Millisecond {
+				sched.coalesceWait = 2 * time.Millisecond
+			}
+			if sched.coalesceWait > 20*time.Millisecond {
+				sched.coalesceWait = 20 * time.Millisecond
 			}
 		}
 		pending := make([]byte, 0, maxPayload*2)
@@ -775,16 +835,13 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 		flushPending := func() error {
 			for len(pending) > 0 {
 				chunkSize := len(pending)
-				chunkCap := maxPayload
-				if adaptiveEnabled && dynamicChunkCap > 0 && dynamicChunkCap < chunkCap {
-					chunkCap = dynamicChunkCap
-				}
+				chunkCap := sched.chunkCap
 				if chunkSize > chunkCap {
 					chunkSize = chunkCap
 				}
 				chunk := pending[:chunkSize]
 				gwPerf.observeTCPFlush(chunkSize)
-				gwPerf.observeTCPAdaptive(chunkCap, coalesceWait)
+				gwPerf.observeTCPAdaptive(chunkCap, sched.coalesceWait)
 				buildStart := time.Now()
 				recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)
 				if buildErr != nil {
@@ -798,7 +855,7 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 				}
 				writeDur := time.Since(writeStart)
 				gwPerf.observeTCPToWT(len(recordBytes), writeDur)
-				adjustAdaptive(writeDur, chunkSize)
+				adjustScheduler(writeDur, chunkSize)
 				core.PutBuffer(recordBytes)
 				pending = pending[chunkSize:]
 			}
@@ -815,7 +872,7 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 					}
 				}
 			}
-			flushTimer.Reset(coalesceWait)
+			flushTimer.Reset(sched.coalesceWait)
 			timerArmed = true
 		}
 
@@ -868,7 +925,7 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 				}
 
 				pending = append(pending, item.data...)
-				if len(pending) >= flushThreshold {
+				if len(pending) >= sched.flushTarget {
 					stopFlushTimer()
 					if fErr := flushPending(); fErr != nil {
 						errCh <- fErr
