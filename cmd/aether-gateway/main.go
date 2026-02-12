@@ -73,6 +73,13 @@ type gatewayPerfStats struct {
 	tcpToWTBytes atomic.Uint64
 	tcpToWTWrites atomic.Uint64
 	tcpToWTWriteNanos atomic.Uint64
+
+	tcpToWTReadWaitCalls atomic.Uint64
+	tcpToWTReadWaitNanos atomic.Uint64
+	tcpToWTBuildCalls atomic.Uint64
+	tcpToWTBuildNanos atomic.Uint64
+	tcpToWTFlushCalls atomic.Uint64
+	tcpToWTFlushBytes atomic.Uint64
 }
 
 var gwPerf gatewayPerfStats
@@ -95,6 +102,24 @@ func (s *gatewayPerfStats) observeTCPToWT(bytes int, d time.Duration) {
 	s.tcpToWTWriteNanos.Add(uint64(d.Nanoseconds()))
 }
 
+func (s *gatewayPerfStats) observeTCPReadWait(d time.Duration) {
+	s.tcpToWTReadWaitCalls.Add(1)
+	s.tcpToWTReadWaitNanos.Add(uint64(d.Nanoseconds()))
+}
+
+func (s *gatewayPerfStats) observeTCPBuild(d time.Duration) {
+	s.tcpToWTBuildCalls.Add(1)
+	s.tcpToWTBuildNanos.Add(uint64(d.Nanoseconds()))
+}
+
+func (s *gatewayPerfStats) observeTCPFlush(bytes int) {
+	if bytes <= 0 {
+		return
+	}
+	s.tcpToWTFlushCalls.Add(1)
+	s.tcpToWTFlushBytes.Add(uint64(bytes))
+}
+
 func startGatewayPerfReporter() {
 	if os.Getenv("PERF_DIAG_ENABLE") != "1" {
 		return
@@ -114,6 +139,9 @@ func startGatewayPerfReporter() {
 
 		var prevWTToTCPBytes, prevWTToTCPWrites, prevWTToTCPNanos uint64
 		var prevTCPToWTBytes, prevTCPToWTWrites, prevTCPToWTNanos uint64
+		var prevTCPReadWaitCalls, prevTCPReadWaitNanos uint64
+		var prevTCPBuildCalls, prevTCPBuildNanos uint64
+		var prevTCPFlushCalls, prevTCPFlushBytes uint64
 
 		for range ticker.C {
 			curWTToTCPBytes := gwPerf.wtToTCPBytes.Load()
@@ -122,6 +150,12 @@ func startGatewayPerfReporter() {
 			curTCPToWTBytes := gwPerf.tcpToWTBytes.Load()
 			curTCPToWTWrites := gwPerf.tcpToWTWrites.Load()
 			curTCPToWTNanos := gwPerf.tcpToWTWriteNanos.Load()
+			curTCPReadWaitCalls := gwPerf.tcpToWTReadWaitCalls.Load()
+			curTCPReadWaitNanos := gwPerf.tcpToWTReadWaitNanos.Load()
+			curTCPBuildCalls := gwPerf.tcpToWTBuildCalls.Load()
+			curTCPBuildNanos := gwPerf.tcpToWTBuildNanos.Load()
+			curTCPFlushCalls := gwPerf.tcpToWTFlushCalls.Load()
+			curTCPFlushBytes := gwPerf.tcpToWTFlushBytes.Load()
 
 			dWTToTCPBytes := curWTToTCPBytes - prevWTToTCPBytes
 			dWTToTCPWrites := curWTToTCPWrites - prevWTToTCPWrites
@@ -129,9 +163,18 @@ func startGatewayPerfReporter() {
 			dTCPToWTBytes := curTCPToWTBytes - prevTCPToWTBytes
 			dTCPToWTWrites := curTCPToWTWrites - prevTCPToWTWrites
 			dTCPToWTNanos := curTCPToWTNanos - prevTCPToWTNanos
+			dTCPReadWaitCalls := curTCPReadWaitCalls - prevTCPReadWaitCalls
+			dTCPReadWaitNanos := curTCPReadWaitNanos - prevTCPReadWaitNanos
+			dTCPBuildCalls := curTCPBuildCalls - prevTCPBuildCalls
+			dTCPBuildNanos := curTCPBuildNanos - prevTCPBuildNanos
+			dTCPFlushCalls := curTCPFlushCalls - prevTCPFlushCalls
+			dTCPFlushBytes := curTCPFlushBytes - prevTCPFlushBytes
 
 			prevWTToTCPBytes, prevWTToTCPWrites, prevWTToTCPNanos = curWTToTCPBytes, curWTToTCPWrites, curWTToTCPNanos
 			prevTCPToWTBytes, prevTCPToWTWrites, prevTCPToWTNanos = curTCPToWTBytes, curTCPToWTWrites, curTCPToWTNanos
+			prevTCPReadWaitCalls, prevTCPReadWaitNanos = curTCPReadWaitCalls, curTCPReadWaitNanos
+			prevTCPBuildCalls, prevTCPBuildNanos = curTCPBuildCalls, curTCPBuildNanos
+			prevTCPFlushCalls, prevTCPFlushBytes = curTCPFlushCalls, curTCPFlushBytes
 
 			sec := interval.Seconds()
 			ulMbps := float64(dWTToTCPBytes*8) / 1_000_000.0 / sec
@@ -149,6 +192,27 @@ func startGatewayPerfReporter() {
 			log.Printf(
 				"[PERF-GW] window=%s dl{mbps=%.2f writes=%d write_us=%.1f} ul{mbps=%.2f writes=%d write_us=%.1f}",
 				interval, dlMbps, dTCPToWTWrites, dlWriteUs, ulMbps, dWTToTCPWrites, ulWriteUs,
+			)
+
+			readWaitUs := 0.0
+			if dTCPReadWaitCalls > 0 {
+				readWaitUs = (float64(dTCPReadWaitNanos) / float64(dTCPReadWaitCalls)) / 1000.0
+			}
+			buildUs := 0.0
+			if dTCPBuildCalls > 0 {
+				buildUs = (float64(dTCPBuildNanos) / float64(dTCPBuildCalls)) / 1000.0
+			}
+			flushAvgBytes := 0.0
+			if dTCPFlushCalls > 0 {
+				flushAvgBytes = float64(dTCPFlushBytes) / float64(dTCPFlushCalls)
+			}
+			log.Printf(
+				"[PERF-GW2] window=%s dl_stage{read_wait_us=%.1f reads=%d build_us=%.1f builds=%d write_block_us=%.1f writes=%d flush_avg_bytes=%.1f flushes=%d}",
+				interval,
+				readWaitUs, dTCPReadWaitCalls,
+				buildUs, dTCPBuildCalls,
+				dlWriteUs, dTCPToWTWrites,
+				flushAvgBytes, dTCPFlushCalls,
 			)
 		}
 	}()
@@ -573,10 +637,13 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 					chunkSize = maxPayload
 				}
 				chunk := pending[:chunkSize]
+				gwPerf.observeTCPFlush(chunkSize)
+				buildStart := time.Now()
 				recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)
 				if buildErr != nil {
 					return buildErr
 				}
+				gwPerf.observeTCPBuild(time.Since(buildStart))
 				writeStart := time.Now()
 				if _, wErr := stream.Write(recordBytes); wErr != nil {
 					core.PutBuffer(recordBytes)
@@ -596,7 +663,9 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 			} else {
 				_ = conn.SetReadDeadline(time.Time{})
 			}
+			readStart := time.Now()
 			n, err := conn.Read(buf)
+			gwPerf.observeTCPReadWait(time.Since(readStart))
 			if n > 0 {
 				pending = append(pending, buf[:n]...)
 				if len(pending) >= flushThreshold {

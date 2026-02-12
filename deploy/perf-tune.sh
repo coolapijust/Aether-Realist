@@ -153,8 +153,8 @@ show_logs() {
     exit 1
   fi
 
-  echo "Collecting [PERF]/[PERF-GW] logs for ${seconds}s..."
-  timeout "${seconds}" docker compose -f "$COMPOSE_FILE" logs -f aether-gateway-core 2>&1 | grep -E --line-buffered "\[PERF(-GW)?\]" || true
+  echo "Collecting [PERF]/[PERF-GW]/[PERF-GW2] logs for ${seconds}s..."
+  timeout "${seconds}" docker compose -f "$COMPOSE_FILE" logs -f aether-gateway-core 2>&1 | grep -E --line-buffered "\[(PERF|PERF-GW|PERF-GW2)\]" || true
 }
 
 run_interactive_once() {
@@ -169,10 +169,10 @@ run_interactive_once() {
   echo "3) dl-a"
   echo "4) dl-b"
   echo "5) dl-c"
-  read -rp "Choice [1-5]: " choice
+  read -rp "Choice [1-5, default 1]: " choice
 
   case "$choice" in
-    1) preset="baseline" ;;
+    ""|1) preset="baseline" ;;
     2) preset="baseline-smooth" ;;
     3) preset="dl-a" ;;
     4) preset="dl-b" ;;
@@ -236,7 +236,7 @@ run_interactive_once() {
 #!/usr/bin/env bash
 set -euo pipefail
 sleep ${start_delay}
-timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}" -f aether-gateway-core 2>&1 | grep -E --line-buffered "\\[PERF(-GW)?\\]" > "${perf_file}" || true
+timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}" -f aether-gateway-core 2>&1 | grep -E --line-buffered "\\[(PERF|PERF-GW|PERF-GW2)\\]" > "${perf_file}" || true
 
 {
   echo "preset=${preset}"
@@ -270,6 +270,17 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
         if (mbps > gw_max) gw_max = mbps
         gw_wsum += w
       }
+      match(\$0, /dl_stage\{read_wait_us=([0-9.]+).*reads=([0-9]+).*build_us=([0-9.]+).*builds=([0-9]+).*write_block_us=([0-9.]+).*writes=([0-9]+).*flush_avg_bytes=([0-9.]+).*flushes=([0-9]+)/, s) {
+        n_gw2++
+        gw2_read_wait_us_sum += (s[1] + 0)
+        gw2_reads_sum += (s[2] + 0)
+        gw2_build_us_sum += (s[3] + 0)
+        gw2_builds_sum += (s[4] + 0)
+        gw2_write_block_us_sum += (s[5] + 0)
+        gw2_writes_sum += (s[6] + 0)
+        gw2_flush_avg_bytes_sum += (s[7] + 0)
+        gw2_flushes_sum += (s[8] + 0)
+      }
       END {
         printf "points_total=%d\n", n_core + n_gw
         if (n_core > 0) {
@@ -289,6 +300,17 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
           printf "gw_dl_avg_write_us=%.1f\n", gw_wsum / n_gw
           printf "gw_dl_max_nonzero_streak=%d\n", gw_max_streak
           if (gw_max_streak >= 6) print "gw_dl_is_continuous6=yes"; else print "gw_dl_is_continuous6=no"
+        }
+        if (n_gw2 > 0) {
+          printf "gw2_points=%d\n", n_gw2
+          printf "gw2_avg_read_wait_us=%.1f\n", gw2_read_wait_us_sum / n_gw2
+          printf "gw2_avg_reads=%.1f\n", gw2_reads_sum / n_gw2
+          printf "gw2_avg_build_us=%.1f\n", gw2_build_us_sum / n_gw2
+          printf "gw2_avg_builds=%.1f\n", gw2_builds_sum / n_gw2
+          printf "gw2_avg_write_block_us=%.1f\n", gw2_write_block_us_sum / n_gw2
+          printf "gw2_avg_writes=%.1f\n", gw2_writes_sum / n_gw2
+          printf "gw2_avg_flush_bytes=%.1f\n", gw2_flush_avg_bytes_sum / n_gw2
+          printf "gw2_avg_flushes=%.1f\n", gw2_flushes_sum / n_gw2
         }
         if (n_core == 0 && n_gw == 0) {
           print "points=0"
