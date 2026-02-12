@@ -23,6 +23,31 @@ curl -sL "https://raw.githubusercontent.com/coolapijust/Aether-Realist/main/depl
 - 生成自签名证书（若未提供）
 - 使用 `deploy/docker-compose.yml` 启动容器
 
+> 备注：从 2026-02-12 起，脚本更新过程不再生成 `*.bak` 备份文件，并会自动清理历史遗留的 `*.bak`。
+
+## 2.1 Native 一键部署（非 Docker）
+
+适用于不希望使用 Docker 的环境（systemd + 本地二进制）。在服务器仓库目录中执行：
+
+```bash
+chmod +x ./deploy-native.sh
+./deploy-native.sh
+```
+
+脚本会：
+- 生成/更新 `deploy/.env`
+- 自动生成 `deploy/certs/server.{crt,key}`（若不存在）
+- 自动准备 `deploy/decoy/index.html`（若不存在）
+- `go build` 构建网关并安装到 `/usr/local/bin/aether-gateway`
+- 写入 systemd 服务：`/etc/systemd/system/aether-gateway.service`
+
+查看状态/日志：
+
+```bash
+./deploy-native.sh status
+./deploy-native.sh logs
+```
+
 ## 3. Docker Compose 关键配置
 
 当前 `deploy/docker-compose.yml` 使用 `network_mode: host`，核心环境变量如下：
