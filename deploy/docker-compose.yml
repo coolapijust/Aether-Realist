@@ -2,7 +2,7 @@ services:
   # Aether 核心服务端 (Host 直连模式 + 多态伪装挂载)
   # 彻底移除 Caddy 代理层，由 Backend 直接处理 TLS 和 443 端口
   aether-backend:
-    image: ghcr.io/coolapijust/aether-realist:main
+    image: ghcr.io/coolapijust/aether-realist:${AETHER_IMAGE_TAG:-main}
     container_name: aether-gateway-core
     restart: always
     network_mode: host

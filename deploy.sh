@@ -19,6 +19,8 @@ echo -e "${GREEN}==============================================${NC}"
 # Example: DEPLOY_REF=exp/dl-continuity-test ./deploy.sh
 DEPLOY_REF="${DEPLOY_REF:-main}"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/${DEPLOY_REF}"
+# Docker tags cannot contain '/', so branch refs are normalized for image tag use.
+DEFAULT_AETHER_IMAGE_TAG="$(echo "$DEPLOY_REF" | sed 's#[/:@]#-#g' | sed 's/[^A-Za-z0-9_.-]/-/g')"
 
 download_file() {
     local FILE_PATH=$1
@@ -126,6 +128,7 @@ install_service() {
     CURRENT_DOMAIN=$(grep "^DOMAIN=" "$ENV_FILE" | cut -d'=' -f2)
     CURRENT_CADDY_PORT=$(grep "^CADDY_PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
     CURRENT_RECORD_PAYLOAD=$(grep "^RECORD_PAYLOAD_BYTES=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
+    CURRENT_AETHER_IMAGE_TAG=$(grep "^AETHER_IMAGE_TAG=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
     CURRENT_DECOY_PATH=$(grep "^DECOY_PATH=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"[:space:]")
     CURRENT_HOST_CERT_PATH=$(grep "^HOST_CERT_PATH=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"")
     CURRENT_HOST_KEY_PATH=$(grep "^HOST_KEY_PATH=" "$ENV_FILE" | cut -d'=' -f2 | tr -d "'\"")
@@ -151,6 +154,9 @@ install_service() {
         echo -e "${YELLOW}输入无效，回退为默认值 16384。${NC}"
         RECORD_PAYLOAD_BYTES=16384
     fi
+
+    # Image tag: keep existing value if present, otherwise follow DEPLOY_REF.
+    AETHER_IMAGE_TAG="${CURRENT_AETHER_IMAGE_TAG:-$DEFAULT_AETHER_IMAGE_TAG}"
 
     # 交互输入 PSK
     if [ -z "$CURRENT_PSK" ]; then
@@ -422,6 +428,7 @@ EOF
     sed -i "/^CERT_FILE=/d" "$ENV_FILE"
     sed -i "/^KEY_FILE=/d" "$ENV_FILE"
     sed -i "/^RECORD_PAYLOAD_BYTES=/d" "$ENV_FILE"
+    sed -i "/^AETHER_IMAGE_TAG=/d" "$ENV_FILE"
 
     echo "CADDY_SITE_ADDRESS=$CADDY_SITE_ADDRESS" >> "$ENV_FILE"
     echo "CADDY_PORT=${CADDY_PORT:-8080}" >> "$ENV_FILE"
@@ -433,6 +440,7 @@ EOF
     echo "CERT_FILE=$CONTAINER_CERT_PATH" >> "$ENV_FILE"
     echo "KEY_FILE=$CONTAINER_KEY_PATH" >> "$ENV_FILE"
     echo "RECORD_PAYLOAD_BYTES=$RECORD_PAYLOAD_BYTES" >> "$ENV_FILE"
+    echo "AETHER_IMAGE_TAG=$AETHER_IMAGE_TAG" >> "$ENV_FILE"
     
     # 生成 Docker Compose 配置
     echo -e "${YELLOW}生成 Docker Compose 配置...${NC}"
@@ -460,7 +468,7 @@ EOF
     cat > deploy/docker-compose.yml <<EOF
 services:
   aether-gateway-core:
-    image: ghcr.io/coolapijust/aether-realist:main
+    image: ghcr.io/coolapijust/aether-realist:\${AETHER_IMAGE_TAG:-main}
     container_name: aether-gateway-core
     restart: always
     network_mode: "host"
