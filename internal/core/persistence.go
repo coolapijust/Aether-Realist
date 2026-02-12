@@ -16,6 +16,8 @@ func DefaultConfig() *SessionConfig {
 		HttpProxyAddr: "127.0.0.1:1081",
 		MaxPadding:    128,
 		RecordPayloadBytes: DefaultMaxRecordPayload,
+		SessionPoolMin: 4,
+		SessionPoolMax: 8,
 		PerfCaptureEnabled: false,
 		PerfCaptureOnConnect: true,
 		PerfLogPath: "logs/perf/client-perf.log",
