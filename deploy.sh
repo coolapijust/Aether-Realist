@@ -15,7 +15,10 @@ echo -e "${GREEN}==============================================${NC}"
 echo -e "${GREEN}    Aether-Realist V5.1 一键部署工具          ${NC}"
 echo -e "${GREEN}==============================================${NC}"
 
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/main"
+# Allow overriding branch/ref for test deployments.
+# Example: DEPLOY_REF=exp/dl-continuity-test ./deploy.sh
+DEPLOY_REF="${DEPLOY_REF:-main}"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/${DEPLOY_REF}"
 
 download_file() {
     local FILE_PATH=$1

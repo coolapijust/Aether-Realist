@@ -237,7 +237,14 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
         mbps = g[1] + 0
         w = g[2] + 0
         gw_sum += mbps
-        if (mbps > 0.10) { gw_nz++; gw_nzsum += mbps }
+        if (mbps > 0.10) {
+          gw_nz++
+          gw_nzsum += mbps
+          gw_streak++
+          if (gw_streak > gw_max_streak) gw_max_streak = gw_streak
+        } else {
+          gw_streak = 0
+        }
         if (n_gw == 1 || mbps < gw_min) gw_min = mbps
         if (mbps > gw_max) gw_max = mbps
         gw_wsum += w
@@ -259,6 +266,8 @@ timeout ${seconds} docker compose -f "${COMPOSE_FILE}" logs --since "${since_ts}
           printf "gw_dl_nonzero_points=%d\n", gw_nz
           if (gw_nz > 0) printf "gw_dl_nonzero_avg_mbps=%.3f\n", gw_nzsum / gw_nz
           printf "gw_dl_avg_write_us=%.1f\n", gw_wsum / n_gw
+          printf "gw_dl_max_nonzero_streak=%d\n", gw_max_streak
+          if (gw_max_streak >= 6) print "gw_dl_is_continuous6=yes"; else print "gw_dl_is_continuous6=no"
         }
         if (n_core == 0 && n_gw == 0) {
           print "points=0"

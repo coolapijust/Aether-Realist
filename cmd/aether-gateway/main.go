@@ -550,35 +550,78 @@ func handleStream(stream *webtransport.Stream, psk string, streamID uint64, ng *
 	// TCP -> WebTransport
 	go func() {
 		buf := make([]byte, 512*1024)
+		maxPayload := core.GetMaxRecordPayload()
+		coalesceWait := 5 * time.Millisecond
+		if v := os.Getenv("TCP_TO_WT_COALESCE_MS"); v != "" {
+			if ms, pErr := strconv.Atoi(v); pErr == nil && ms >= 0 && ms <= 200 {
+				coalesceWait = time.Duration(ms) * time.Millisecond
+			}
+		}
+		// Flush threshold controls when we stop waiting for more small TCP reads.
+		flushThreshold := maxPayload
+		if v := os.Getenv("TCP_TO_WT_FLUSH_THRESHOLD"); v != "" {
+			if parsed, pErr := strconv.Atoi(v); pErr == nil && parsed >= 1024 && parsed <= core.MaxRecordSize-core.RecordHeaderLength {
+				flushThreshold = parsed
+			}
+		}
+		pending := make([]byte, 0, maxPayload*2)
+
+		flushPending := func() error {
+			for len(pending) > 0 {
+				chunkSize := len(pending)
+				if chunkSize > maxPayload {
+					chunkSize = maxPayload
+				}
+				chunk := pending[:chunkSize]
+				recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)
+				if buildErr != nil {
+					return buildErr
+				}
+				writeStart := time.Now()
+				if _, wErr := stream.Write(recordBytes); wErr != nil {
+					core.PutBuffer(recordBytes)
+					return wErr
+				}
+				gwPerf.observeTCPToWT(len(recordBytes), time.Since(writeStart))
+				core.PutBuffer(recordBytes)
+				pending = pending[chunkSize:]
+			}
+			pending = pending[:0]
+			return nil
+		}
+
 		for {
+			if len(pending) > 0 {
+				_ = conn.SetReadDeadline(time.Now().Add(coalesceWait))
+			} else {
+				_ = conn.SetReadDeadline(time.Time{})
+			}
 			n, err := conn.Read(buf)
 			if n > 0 {
-				// Chunk payload to protocol-sized records to reduce HoL blocking.
-				remaining := buf[:n]
-				for len(remaining) > 0 {
-					chunkSize := len(remaining)
-					maxPayload := core.GetMaxRecordPayload()
-					if chunkSize > maxPayload {
-						chunkSize = maxPayload
-					}
-					chunk := remaining[:chunkSize]
-					recordBytes, buildErr := core.BuildDataRecord(chunk, meta.Options.MaxPadding, ng)
-					if buildErr != nil {
-						errCh <- buildErr
+				pending = append(pending, buf[:n]...)
+				if len(pending) >= flushThreshold {
+					if fErr := flushPending(); fErr != nil {
+						errCh <- fErr
 						return
 					}
-					writeStart := time.Now()
-					if _, wErr := stream.Write(recordBytes); wErr != nil {
-						core.PutBuffer(recordBytes)
-						errCh <- wErr
-						return
-					}
-					gwPerf.observeTCPToWT(len(recordBytes), time.Since(writeStart))
-					core.PutBuffer(recordBytes)
-					remaining = remaining[chunkSize:]
 				}
 			}
 			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					if len(pending) > 0 {
+						if fErr := flushPending(); fErr != nil {
+							errCh <- fErr
+							return
+						}
+					}
+					continue
+				}
+				if len(pending) > 0 {
+					if fErr := flushPending(); fErr != nil {
+						errCh <- fErr
+						return
+					}
+				}
 				if err != io.EOF {
 					// Ignore "use of closed network connection" if caused by other side closing
 					if !strings.Contains(err.Error(), "closed network connection") {
