@@ -100,7 +100,8 @@ get_latest_release_tag() {
     # Minimal JSON parsing (no jq dependency).
     curl -fsSL "${GITHUB_API_REPO}/releases/latest" \
         | grep -m1 '"tag_name"' \
-        | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
+        | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' \
+        | tr -d '\r'
 }
 
 try_install_from_release() {
@@ -122,6 +123,8 @@ try_install_from_release() {
 
     url="https://github.com/coolapijust/Aether-Realist/releases/download/${tag}/aether-gateway-linux-${arch}"
     sha_url="${url}.sha256"
+    url="$(printf %s "$url" | tr -d '\r\n')"
+    sha_url="$(printf %s "$sha_url" | tr -d '\r\n')"
 
     echo -e "${YELLOW}尝试下载预编译网关: ${tag} (linux-${arch})...${NC}"
     if ! curl -fsSL "$url" -o "$out"; then
@@ -130,11 +133,17 @@ try_install_from_release() {
     chmod +x "$out"
 
     # Best-effort checksum verify if sha file exists.
+    # Release sha files may contain either "hash  dist/file" or "hash  file".
     if curl -fsSL "$sha_url" -o "${out}.sha256" 2>/dev/null; then
-        (cd "$(dirname "$out")" && sha256sum -c "$(basename "${out}.sha256")") || {
-            echo -e "${RED}校验失败: ${out}.sha256${NC}"
+        local expected actual
+        expected="$(awk '{print $1}' "${out}.sha256" | head -n 1 | tr -d '\r')"
+        actual="$(sha256sum "$out" | awk '{print $1}')"
+        if [ -n "$expected" ] && [ "$expected" != "$actual" ]; then
+            echo -e "${RED}校验失败: sha256 不匹配${NC}"
+            echo -e "${YELLOW}expected=${expected}${NC}"
+            echo -e "${YELLOW}actual  =${actual}${NC}"
             return 1
-        }
+        fi
     fi
 
     run_root install -m 0755 "$out" "$BIN_PATH"

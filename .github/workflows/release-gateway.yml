@@ -41,7 +41,8 @@ jobs:
           go mod tidy
           go mod download
           go build -trimpath -ldflags="-s -w" -o "${out}" ./cmd/aether-gateway
-          sha256sum "${out}" > "${out}.sha256"
+          base="$(basename "${out}")"
+          (cd dist && sha256sum "${base}" > "${base}.sha256")
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
