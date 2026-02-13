@@ -12,6 +12,7 @@ type Time = monotime.Time
 type PacketNumber = protocol.PacketNumber
 
 const InitialPacketSize = protocol.InitialPacketSize
+const MinPacingDelay = protocol.MinPacingDelay
 
 type AckedPacketInfo struct {
 	PacketNumber protocol.PacketNumber
@@ -43,6 +44,7 @@ type SendAlgorithm interface {
 	OnCongestionEventEx(priorInFlight ByteCount, eventTime Time, ackedPackets []AckedPacketInfo, lostPackets []LostPacketInfo)
 	OnRetransmissionTimeout(packetsRetransmitted bool)
 	SetMaxDatagramSize(ByteCount)
+	GetCongestionWindow() ByteCount
 }
 
 // CongestionControl is an alias for SendAlgorithm
