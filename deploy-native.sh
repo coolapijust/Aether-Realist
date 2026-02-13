@@ -17,6 +17,7 @@ echo -e "${GREEN}==============================================${NC}"
 DEPLOY_REF="${DEPLOY_REF:-main}"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/${DEPLOY_REF}"
 GITHUB_REPO="https://github.com/coolapijust/Aether-Realist.git"
+GITHUB_API_REPO="https://api.github.com/repos/coolapijust/Aether-Realist"
 SERVICE_NAME="aether-gateway"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 BIN_PATH="/usr/local/bin/aether-gateway"
@@ -85,15 +86,67 @@ port_in_use() {
     return 0
 }
 
+detect_arch() {
+    local m
+    m="$(uname -m)"
+    case "$m" in
+        x86_64|amd64) echo "amd64" ;;
+        aarch64|arm64) echo "arm64" ;;
+        *) return 1 ;;
+    esac
+}
+
+get_latest_release_tag() {
+    # Minimal JSON parsing (no jq dependency).
+    curl -fsSL "${GITHUB_API_REPO}/releases/latest" \
+        | grep -m1 '"tag_name"' \
+        | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
+}
+
+try_install_from_release() {
+    # If AETHER_RELEASE_TAG is set, use it; otherwise use latest release.
+    # This avoids requiring Go on the server for native deploy.
+    local tag arch url out sha_url
+
+    arch="$(detect_arch)" || return 1
+    tag="${AETHER_RELEASE_TAG:-}"
+    if [ -z "$tag" ]; then
+        tag="$(get_latest_release_tag 2>/dev/null || true)"
+    fi
+    if [ -z "$tag" ]; then
+        return 1
+    fi
+
+    out="${AETHER_HOME}/bin/aether-gateway"
+    run_root mkdir -p "$(dirname "$out")"
+
+    url="https://github.com/coolapijust/Aether-Realist/releases/download/${tag}/aether-gateway-linux-${arch}"
+    sha_url="${url}.sha256"
+
+    echo -e "${YELLOW}尝试下载预编译网关: ${tag} (linux-${arch})...${NC}"
+    if ! curl -fsSL "$url" -o "$out"; then
+        return 1
+    fi
+    chmod +x "$out"
+
+    # Best-effort checksum verify if sha file exists.
+    if curl -fsSL "$sha_url" -o "${out}.sha256" 2>/dev/null; then
+        (cd "$(dirname "$out")" && sha256sum -c "$(basename "${out}.sha256")") || {
+            echo -e "${RED}校验失败: ${out}.sha256${NC}"
+            return 1
+        }
+    fi
+
+    run_root install -m 0755 "$out" "$BIN_PATH"
+    INSTALLED_FROM_RELEASE=1
+    return 0
+}
+
 ensure_prereqs() {
     require_cmd curl || exit 1
     require_cmd systemctl || exit 1
     require_cmd openssl || exit 1
-    require_cmd go || {
-        echo -e "${RED}错误: 未检测到 Go。Native 部署需要 Go 构建网关。${NC}"
-        echo -e "${YELLOW}建议: 安装 Go 后重试 (go.mod 要求 Go 1.26)。${NC}"
-        exit 1
-    }
+    # Go is only required when falling back to source build.
 }
 
 download_file() {
@@ -351,7 +404,24 @@ EOF
 }
 
 build_binary() {
-    echo -e "${YELLOW}正在构建网关二进制...${NC}"
+    if [ "${INSTALLED_FROM_RELEASE:-0}" = "1" ]; then
+        return 0
+    fi
+
+    if try_install_from_release; then
+        echo -e "${GREEN}已从 Release 安装网关二进制。${NC}"
+        return 0
+    fi
+
+    require_cmd go || {
+        echo -e "${RED}错误: 未检测到 Go，且未能下载 Release 预编译二进制。${NC}"
+        echo -e "${YELLOW}退路:${NC}"
+        echo -e "  1) 安装 Go (go.mod 要求 Go 1.26) 后重试"
+        echo -e "  2) 或设置 AETHER_RELEASE_TAG=某个已发布 tag 再试"
+        exit 1
+    }
+
+    echo -e "${YELLOW}正在从源码构建网关二进制...${NC}"
     mkdir -p "${AETHER_HOME}/bin"
     (cd "$SRC_DIR" && go build -o "${AETHER_HOME}/bin/aether-gateway" ./cmd/aether-gateway)
     if [ ! -f "${AETHER_HOME}/bin/aether-gateway" ]; then
@@ -388,7 +458,9 @@ EOF
 
 install_or_update_service() {
     ensure_prereqs
-    ensure_source
+    # Only fetch source if we might need to build; we try release binary first.
+    INSTALLED_FROM_RELEASE=0
+    try_install_from_release || ensure_source
     cleanup_legacy_baks
     ensure_env_file
     prompt_core_config

@@ -1,0 +1,50 @@
+name: release-gateway
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          export CGO_ENABLED=0
+          export GOOS="${{ matrix.goos }}"
+          export GOARCH="${{ matrix.goarch }}"
+          out="dist/aether-gateway-${GOOS}-${GOARCH}"
+          go mod download
+          go build -trimpath -ldflags="-s -w" -o "${out}" ./cmd/aether-gateway
+          sha256sum "${out}" > "${out}.sha256"
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/aether-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
+            dist/aether-gateway-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+

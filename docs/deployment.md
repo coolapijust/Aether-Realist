@@ -37,7 +37,8 @@ curl -fsSL "https://raw.githubusercontent.com/coolapijust/Aether-Realist/main/de
 - 生成/更新 `deploy/.env`
 - 自动生成 `deploy/certs/server.{crt,key}`（若不存在）
 - 自动准备 `deploy/decoy/index.html`（若不存在）
-- `go build` 构建网关并安装到 `/usr/local/bin/aether-gateway`
+- 默认从 GitHub Release 下载预编译网关并安装到 `/usr/local/bin/aether-gateway`（无需 Go）
+- 若未找到 Release/下载失败，则回退为 `go build` 源码构建（此时需要 Go 1.26）
 - 写入 systemd 服务：`/etc/systemd/system/aether-gateway.service`
 - 源码目录：`/opt/aether-realist/src`
 

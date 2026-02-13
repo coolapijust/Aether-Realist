@@ -91,7 +91,7 @@ curl -sL "https://raw.githubusercontent.com/coolapijust/Aether-Realist/main/depl
 curl -fsSL "https://raw.githubusercontent.com/coolapijust/Aether-Realist/main/deploy-native.sh?$(date +%s)" | sudo bash -s -- install
 ```
 
-该脚本会把源码拉取/更新到 `/opt/aether-realist`，编译并安装二进制到 `/usr/local/bin/aether-gateway`，并写入 systemd 服务 `aether-gateway`。
+该脚本会优先从 GitHub Release 下载预编译网关并安装到 `/usr/local/bin/aether-gateway`（无需 Go）；若未找到 Release/下载失败，则回退为拉取源码到 `/opt/aether-realist/src` 并本地编译。
 
 > 详细参数配置请参阅：[部署指南](docs/deployment.md)
 > 下载瓶颈定位可直接使用：`deploy/perf-tune.sh`（自动应用窗口预设、重启并抓 PERF 日志）。
