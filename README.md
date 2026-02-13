@@ -6,8 +6,10 @@
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/WebTransport-HTTP%2F3-orange.svg" alt="WebTransport">
 </p>
+Aether-Realist 是一个全新的基于 **WebTransport (HTTP/3)** 的高性能/高隐蔽性代理协议。
 
-Aether-Realist 是一套基于 **WebTransport (HTTP/3)** 的高性能代理系统。当前实现由三部分组成：
+当前实现由三部分组成：
+
 - `aether-gateway`：服务端网关（二进制 + Docker 镜像）
 - `aetherd`：本地 Core Daemon（SOCKS5/HTTP 代理 + 控制 API）
 - GUI（Tauri + React）：调用 `aetherd` API 并订阅事件流
@@ -128,3 +130,15 @@ go build -o aetherd.exe ./cmd/aetherd
 
 ## 📄 开源协议
 本项目采用 [MIT License](LICENSE) 许可协议。
+
+---
+
+## 🔄 持续集成与发布
+
+本项目采用 **GitHub Actions** 进行全自动化构建与发布：
+
+1.  **触发机制**：向 `main` 分支提交代码 (Push) 即可触发。
+2.  **自动版本**：构建系统会自动生成形如 `v5.1.YYYYMMDD.RunID` 的版本标签。
+3.  **产物发布**：构建完成后，服务端（Gateway）与客户端（Client/Core）的多平台二进制文件会自动上传至 [GitHub Releases](https://github.com/coolapijust/Aether-Realist/releases) 页面。
+
+无需手动打 Tag 或上传文件，开发迭代即可即时交付。
