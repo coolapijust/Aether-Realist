@@ -331,7 +331,7 @@ func (m *sessionManager) dialSession(ctx context.Context) (*webtransport.Session
 }
 
 type webTransportConn struct {
-	stream     webtransport.Stream
+	stream     *webtransport.Stream
 	reader     *recordReader
 	options    clientOptions
 	localAddr  net.Addr
@@ -339,7 +339,7 @@ type webTransportConn struct {
 	nonceGen   *nonceGenerator // V5: Counter-based nonce generator
 }
 
-func newWebTransportConn(stream webtransport.Stream, opts clientOptions, ng *nonceGenerator) *webTransportConn {
+func newWebTransportConn(stream *webtransport.Stream, opts clientOptions, ng *nonceGenerator) *webTransportConn {
 	return &webTransportConn{
 		stream:     stream,
 		reader:     newRecordReader(stream),
@@ -535,7 +535,7 @@ func buildDataRecord(payload []byte, maxPadding uint16, ng *nonceGenerator) ([]b
 	}
 
 	// V5: Get nonce from generator
-	nonce, counter, err := ng.next()
+	_, counter, err := ng.next()
 	if err != nil {
 		return nil, err
 	}
