@@ -3,7 +3,10 @@
 # Aether-Realist Native (non-Docker) one-click deploy script
 # Runtime: systemd + local binary
 
-set -e
+set -euo pipefail
+
+# Print the failing command and line number. This makes "silent exits" diagnosable over SSH.
+trap 'echo "ERROR: line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
