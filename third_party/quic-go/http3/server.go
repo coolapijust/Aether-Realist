@@ -798,7 +798,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.connCount.Load() == 0 {
 		return s.Close()
 	}
-	return nil
+
+	select {
+	case <-s.connHandlingDone: // all connections were closed
+		// When receiving a GOAWAY frame, HTTP/3 clients are expected to close the connection
+		// once all requests were successfully handled...
+		return s.Close()
+	case <-ctx.Done():
+		// ... however, clients handling long-lived requests (and misbehaving clients),
+		// might not do so before the context is cancelled.
+		// In this case, we close the server, which closes all existing connections
+		// (expect those passed to ServeQUICConn).
+		_ = s.Close()
+		return ctx.Err()
+	}
 }
 
 // NewRawServerConn creates a new HTTP/3 server connection.
@@ -822,20 +835,6 @@ func (s *Server) NewRawServerConn(conn *quic.Conn) *Conn {
 		s.Logger,
 		s.IdleTimeout,
 	)
-}
-	select {
-	case <-s.connHandlingDone: // all connections were closed
-		// When receiving a GOAWAY frame, HTTP/3 clients are expected to close the connection
-		// once all requests were successfully handled...
-		return s.Close()
-	case <-ctx.Done():
-		// ... however, clients handling long-lived requests (and misbehaving clients),
-		// might not do so before the context is cancelled.
-		// In this case, we close the server, which closes all existing connections
-		// (expect those passed to ServeQUICConn).
-		_ = s.Close()
-		return ctx.Err()
-	}
 }
 
 // ErrNoAltSvcPort is the error returned by SetQUICHeaders when no port was found
