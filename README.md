@@ -1,7 +1,7 @@
 # Aether-Realist
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-V5.1.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-V5.2.0--BrutalCC-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/WebTransport-HTTP%2F3-orange.svg" alt="WebTransport">
@@ -36,7 +36,12 @@ Aether-Realist 是一个全新的基于 **WebTransport (HTTP/3)** 的高性能/�
 *   **窗口手工覆盖（可选）**：支持 `QUIC_*_RECV_WINDOW` 四个环境变量，对窗口做精细 A/B。
 *   **可调分片大小 (`RECORD_PAYLOAD_BYTES`)**：默认 16KB，可按链路 A/B 调整（如 4KB/8KB/16KB）。
 *   **大 UDP 缓冲**：客户端/网关均尝试设置 32MB UDP 读写缓冲。
-*   **内置性能诊断 (`PERF_DIAG_ENABLE`)**：周期输出上下行读写/解析耗时与吞吐，便于定位下行瓶颈。
+### 4. **Brutal CC 拥塞控制 (NEW)**
+*   **算法移植**：源自 Hysteria 2 的 Brutal 算法，专为大带宽、高丢包环境设计。
+*   **固定速率推流**：忽略丢包信号，基于设定的目标带宽 (`BRUTAL_BPS`) 恒定发送。
+*   **配置方式**：
+    *   客户端/网关环境变量：`export BRUTAL_BPS=100000000` (100 Mbps)
+    *   默认值：12.5 MB/s (100 Mbps)
 
 ---
 
@@ -103,6 +108,8 @@ curl -fsSL "https://raw.githubusercontent.com/coolapijust/Aether-Realist/main/de
 
 ```bash
 # 若需手动构建 core daemon
+# 注意：本项目使用了内置的 quic-go 补丁 (third_party/quic-go)
+# 请确保你的 Go 环境能正常处理本地 replace 指令
 go build -o aetherd.exe ./cmd/aetherd
 ```
 
@@ -117,6 +124,7 @@ go build -o aetherd.exe ./cmd/aetherd
 *   📄 **[协议规范手册](docs/aether-realist-protocol.md)**：Record、加密、重放防护、分片策略。
 *   🔌 **[API 规范指南](docs/api-specification.md)**：`aetherd` 本地 REST + WebSocket 事件流。
 *   🗺️ **[设计文档](docs/design.md)**：当前代码架构与性能/安全权衡。
+*   🚀 **[Brutal CC 集成指南](docs/brutal-cc.md)** (test分支)：关于自定义拥塞控制的实现细节。
 
 ---
 
@@ -140,5 +148,6 @@ go build -o aetherd.exe ./cmd/aetherd
 1.  **触发机制**：向 `main` 分支提交代码 (Push) 即可触发。
 2.  **自动版本**：构建系统会自动生成形如 `v5.1.YYYYMMDD.RunID` 的版本标签。
 3.  **产物发布**：构建完成后，服务端（Gateway）与客户端（Client/Core）的多平台二进制文件会自动上传至 [GitHub Releases](https://github.com/coolapijust/Aether-Realist/releases) 页面。
+4.  **内置补丁支持**：CI 流程已适配 `third_party/quic-go`，无需额外配置。
 
 无需手动打 Tag 或上传文件，开发迭代即可即时交付。
