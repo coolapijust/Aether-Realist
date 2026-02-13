@@ -100,7 +100,7 @@ curl_fetch() {
     fi
 }
 
-SCRIPT_VERSION="2026-02-13-ux-ascii"
+SCRIPT_VERSION="2026-02-13-31df43da"
 log "script_version=${SCRIPT_VERSION}"
 
 # When this script is executed via `curl | bash`, stdin is a pipe so `read -p` sees EOF.
