@@ -11,4 +11,4 @@ require (
 	golang.org/x/time v0.12.0
 )
 
-replace github.com/quic-go/quic-go => github.com/apernet/quic-go eec82330617882208034a742880029b3ae3d28ec
+replace github.com/quic-go/quic-go => d:/aether-quic-go-fork
