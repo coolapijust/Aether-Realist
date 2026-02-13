@@ -71,21 +71,22 @@ ensure_prereqs() {
 }
 
 download_file() {
-    local file_path="$1"
+    local rel_path="$1"
     local force_update="$2"
-    local url="$GITHUB_RAW_BASE/$file_path"
+    local dest="${AETHER_HOME}/${rel_path}"
+    local url="$GITHUB_RAW_BASE/$rel_path"
 
     # Remove historical backups and do not create new ones.
-    [ -f "${file_path}.bak" ] && rm -f "${file_path}.bak"
-    if [ -f "$file_path" ] && [ "$force_update" = "true" ]; then
-        rm -f "$file_path"
+    [ -f "${dest}.bak" ] && rm -f "${dest}.bak"
+    if [ -f "$dest" ] && [ "$force_update" = "true" ]; then
+        rm -f "$dest"
     fi
 
-    if [ ! -f "$file_path" ]; then
-        echo -e "正在从 GitHub 获取/更新 ${YELLOW}$file_path${NC}..."
-        mkdir -p "$(dirname "$file_path")"
-        if ! curl -fsSL "$url?$(date +%s)" -o "$file_path"; then
-            echo -e "${RED}错误: 下载 $file_path 失败。${NC}"
+    if [ ! -f "$dest" ]; then
+        echo -e "正在从 GitHub 获取/更新 ${YELLOW}$rel_path${NC}..."
+        run_root mkdir -p "$(dirname "$dest")"
+        if ! curl -fsSL "$url?$(date +%s)" -o "$dest"; then
+            echo -e "${RED}错误: 下载 $rel_path 失败。${NC}"
             exit 1
         fi
     fi
@@ -152,7 +153,7 @@ ensure_source() {
 
 ensure_env_file() {
     run_root mkdir -p "${AETHER_HOME}/deploy/certs" "${AETHER_HOME}/deploy/decoy"
-    download_file "${AETHER_HOME}/deploy/.env.example" "false"
+    download_file "deploy/.env.example" "false"
     if [ ! -f "$ENV_FILE" ]; then
         cp "${AETHER_HOME}/deploy/.env.example" "$ENV_FILE"
     fi
