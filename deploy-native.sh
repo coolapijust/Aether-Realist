@@ -101,7 +101,7 @@ get_latest_release_tag() {
     curl -fsSL "${GITHUB_API_REPO}/releases/latest" \
         | grep -m1 '"tag_name"' \
         | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' \
-        | tr -d '\r'
+        | tr -d '\r\n\t '
 }
 
 try_install_from_release() {
@@ -111,9 +111,11 @@ try_install_from_release() {
 
     arch="$(detect_arch)" || return 1
     tag="${AETHER_RELEASE_TAG:-}"
+    tag="$(printf %s "$tag" | tr -d '\r\n\t ')"
     if [ -z "$tag" ]; then
         tag="$(get_latest_release_tag 2>/dev/null || true)"
     fi
+    tag="$(printf %s "$tag" | tr -d '\r\n\t ')"
     if [ -z "$tag" ]; then
         return 1
     fi
@@ -128,6 +130,8 @@ try_install_from_release() {
 
     echo -e "${YELLOW}尝试下载预编译网关: ${tag} (linux-${arch})...${NC}"
     if ! curl -fsSL "$url" -o "$out"; then
+        # Helpful when curl returns (3): show the exact URL bytes/escapes.
+        echo -e "${YELLOW}Release URL (escaped): $(printf %q "$url")${NC}" 1>&2
         return 1
     fi
     chmod +x "$out"
