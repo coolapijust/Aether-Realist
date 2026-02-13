@@ -342,26 +342,24 @@ setup_decoy_native() {
 
     case "$template" in
         sso)
-            cat > "${dest_dir}/index.html" <<'EOF'
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign In</title><style>body{font-family:system-ui,Segoe UI,Arial;background:#f5f7fb;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:28px;width:360px;box-shadow:0 10px 30px rgba(0,0,0,.08)}h1{font-size:18px;margin:0 0 8px}p{margin:0 0 18px;color:#6b7280;font-size:13px}input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;margin:8px 0;box-sizing:border-box}button{width:100%;padding:10px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-weight:600}</style></head><body><div class="card"><h1>Enterprise Access</h1><p>Sign in with your organizational account</p><input placeholder="Email"><input type="password" placeholder="Password"><button>Sign In</button></div></body></html>
+            run_root tee "${dest_dir}/index.html" >/dev/null <<'EOF'
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Sign In - Enterprise Access</title><style>body{font-family:'Segoe UI',SanFrancisco,sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{background:#fff;padding:40px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);width:360px;text-align:center}.logo{width:64px;height:64px;background:#0078d4;border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:bold}input{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}button{width:100%;padding:12px;background:#0078d4;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600}.error{color:#d93025;font-size:13px;margin:10px 0;display:none}</style><script>function login(){document.getElementById('err').style.display='block';setTimeout(()=>{document.getElementById('err').style.display='none'},3000)}</script></head><body><div class="card"><div class="logo">E</div><h2>Enterprise Access</h2><p style="color:#666;font-size:14px;margin-bottom:20px">Sign in with your organizational account</p><input type="email" placeholder="someone@example.com"><input type="password" placeholder="Password"><div id="err" class="error">Account temporarily locked. Please contact IT support.</div><button onclick="login()">Sign In</button><p style="margin-top:20px;font-size:12px;color:#999">&copy; 2024 Secure Identity Provider</p></div></body></html>
 EOF
             ;;
         monitor)
-            cat > "${dest_dir}/index.html" <<'EOF'
-<!doctype html><html><head><meta charset="utf-8"><title>System Monitor</title><style>body{background:#0b1020;color:#d1d5db;font-family:monospace;padding:18px}h1{margin:0 0 12px}pre{background:#060914;border:1px solid #1f2937;padding:12px;border-radius:10px;overflow:auto}</style></head><body><h1>System Status: OPERATIONAL</h1><pre>node: gw-01
-cpu: nominal
-mem: nominal
-net: nominal</pre></body></html>
+            run_root tee "${dest_dir}/index.html" >/dev/null <<'EOF'
+<!DOCTYPE html><html><head><title>System Monitor - Node 8a2f</title><style>body{background:#111;color:#0f0;font-family:monospace;padding:20px}canvas{border:1px solid #333;width:100%;height:300px;background:#000}.stat{display:inline-block;width:30%;margin-right:2%;border:1px solid #333;padding:10px;margin-bottom:20px}h2{margin-top:0}</style></head><body><h1>System Status: OPERATIONAL</h1><div class="stat"><h2>CPU Load</h2><div id="cpu">0%</div></div><div class="stat"><h2>Memory</h2><div id="mem">0GB / 64GB</div></div><div class="stat"><h2>Network</h2><div id="net">0.0 Mb/s</div></div><canvas id="chart"></canvas><script>const ctx=document.getElementById('chart').getContext('2d');let data=new Array(100).fill(0);function draw(){ctx.clearRect(0,0,1000,300);ctx.beginPath();ctx.moveTo(0,150);data.forEach((v,i)=>{ctx.lineTo(i*10,150-v)});ctx.strokeStyle='#0f0';ctx.stroke();document.getElementById('cpu').innerText=Math.floor(Math.random()*20)+'%';document.getElementById('net').innerText=(Math.random()*50).toFixed(1)+' Mb/s';data.push(Math.random()*50);data.shift();requestAnimationFrame(draw)}draw();</script></body></html>
 EOF
             ;;
         nginx)
-            cat > "${dest_dir}/index.html" <<'EOF'
-<!doctype html><html><head><meta charset="utf-8"><title>403 Forbidden</title><style>body{font-family:Tahoma,Verdana,Arial,sans-serif;margin:40px auto;max-width:520px;color:#444}h1{font-weight:normal}hr{border:0;border-top:1px solid #eee}</style></head><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p><hr><address>nginx</address></body></html>
+            run_root tee "${dest_dir}/index.html" >/dev/null <<'EOF'
+<!DOCTYPE html><html><head><title>403 Forbidden</title><style>body{width:35em;margin:0 auto;font-family:Tahoma,Verdana,Arial,sans-serif}h1{font-weight:normal;color:#444}hr{border:0;border-top:1px solid #eee}</style></head><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p><hr><address>nginx/1.18.0 (Ubuntu) Server at localhost Port 80</address></body></html>
 EOF
             ;;
         *)
-            cat > "${dest_dir}/index.html" <<'EOF'
-<!doctype html><html><head><meta charset="utf-8"><title>Service Online</title></head><body><h1>Service Online</h1></body></html>
+            # Default to the recommended template to avoid overly thin fingerprints.
+            run_root tee "${dest_dir}/index.html" >/dev/null <<'EOF'
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Sign In - Enterprise Access</title><style>body{font-family:'Segoe UI',SanFrancisco,sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.card{background:#fff;padding:40px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);width:360px;text-align:center}.logo{width:64px;height:64px;background:#0078d4;border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:bold}input{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}button{width:100%;padding:12px;background:#0078d4;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600}.error{color:#d93025;font-size:13px;margin:10px 0;display:none}</style><script>function login(){document.getElementById('err').style.display='block';setTimeout(()=>{document.getElementById('err').style.display='none'},3000)}</script></head><body><div class="card"><div class="logo">E</div><h2>Enterprise Access</h2><p style="color:#666;font-size:14px;margin-bottom:20px">Sign in with your organizational account</p><input type="email" placeholder="someone@example.com"><input type="password" placeholder="Password"><div id="err" class="error">Account temporarily locked. Please contact IT support.</div><button onclick="login()">Sign In</button><p style="margin-top:20px;font-size:12px;color:#999">&copy; 2024 Secure Identity Provider</p></div></body></html>
 EOF
             ;;
     esac
@@ -856,12 +854,8 @@ prepare_decoy_and_cert() {
 
     # Ensure decoy exists when using the default decoy directory.
     if [ "$decoy_root" = "${AETHER_HOME}/deploy/decoy" ] && [ ! -f "${AETHER_HOME}/deploy/decoy/index.html" ]; then
-        run_root mkdir -p "${AETHER_HOME}/deploy/decoy"
-        cat > "${AETHER_HOME}/deploy/decoy/index.html" <<'EOF'
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Aether Gateway</title></head>
-<body><h1>Service Online</h1><p>Static decoy page.</p></body></html>
-EOF
+        # Keep native default aligned with deploy.sh templates; avoid self-identifying titles.
+        setup_decoy_native sso
     fi
 
     # If user-specified cert paths are invalid, fall back to default location and self-signed.

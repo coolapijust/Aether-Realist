@@ -1,0 +1,14 @@
+aether-gateway-core  | 2026/02/12 17:08:03 [PERF] enabled=true interval=10s
+aether-gateway-core  | 2026/02/12 17:08:03 [PERF-GW] enabled=true interval=10s
+aether-gateway-core  | 2026/02/12 17:08:13 [PERF-GW] window=10s dl{mbps=0.00 writes=0 write_us=0.0} ul{mbps=0.00 writes=0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:13 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:23 [PERF-GW] window=10s dl{mbps=0.00 writes=0 write_us=0.0} ul{mbps=0.00 writes=0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:23 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:33 [PERF-GW] window=10s dl{mbps=0.00 writes=0 write_us=0.0} ul{mbps=0.00 writes=0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:33 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:43 [PERF-GW] window=10s dl{mbps=1.79 writes=189 write_us=42047.4} ul{mbps=0.01 writes=48 write_us=78.2}
+aether-gateway-core  | 2026/02/12 17:08:43 [PERF] window=10s down{mbps=0.02 rps=58 read_us=159242.3 parse_us=7.5 dec_us=1.7} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:08:53 [PERF-GW] window=10s dl{mbps=1.96 writes=154 write_us=64298.6} ul{mbps=0.00 writes=39 write_us=80.6}
+aether-gateway-core  | 2026/02/12 17:08:53 [PERF] window=10s down{mbps=0.00 rps=47 read_us=211818.2 parse_us=3.7 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:09:03 [PERF] window=10s down{mbps=0.00 rps=52 read_us=187325.1 parse_us=2.8 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:09:03 [PERF-GW] window=10s dl{mbps=2.26 writes=178 write_us=56553.0} ul{mbps=0.00 writes=44 write_us=74.6}

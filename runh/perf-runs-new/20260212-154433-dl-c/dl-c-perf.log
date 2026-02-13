@@ -1,0 +1,12 @@
+aether-gateway-core  | 2026/02/12 15:44:51 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:01 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:11 [PERF] window=10s down{mbps=0.01 rps=10 read_us=44.8 parse_us=1.8 dec_us=1.4} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:21 [PERF] window=10s down{mbps=0.02 rps=107 read_us=104120.0 parse_us=2.5 dec_us=2.3} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:31 [PERF] window=10s down{mbps=0.01 rps=79 read_us=123436.8 parse_us=3.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:41 [PERF] window=10s down{mbps=0.01 rps=83 read_us=122143.6 parse_us=2.9 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:45:51 [PERF] window=10s down{mbps=0.01 rps=81 read_us=122599.5 parse_us=3.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:01 [PERF] window=10s down{mbps=0.01 rps=80 read_us=127757.8 parse_us=3.0 dec_us=1.9} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:11 [PERF] window=10s down{mbps=0.01 rps=74 read_us=134264.5 parse_us=4.2 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:21 [PERF] window=10s down{mbps=0.01 rps=83 read_us=124856.1 parse_us=3.6 dec_us=1.6} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:31 [PERF] window=10s down{mbps=0.01 rps=78 read_us=127703.6 parse_us=3.3 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:41 [PERF] window=10s down{mbps=0.01 rps=72 read_us=138339.4 parse_us=3.5 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}

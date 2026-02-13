@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,8 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	webtransport "github.com/quic-go/webtransport-go"
+
+	"aether-rea/internal/congestion/brutal"
 )
 
 // sessionManager manages WebTransport sessions and their lifecycle.
@@ -164,7 +168,21 @@ func (sm *sessionManager) initialize() error {
 			if err != nil {
 				return nil, err
 			}
-			return tr.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+			conn, err := tr.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+			if err != nil {
+				return nil, err
+			}
+			// V6: Inject Brutal congestion control (like Hysteria2)
+			// Default: 100 Mbps = 12,500,000 bytes/s
+			brutalBPS := uint64(12_500_000)
+			if v := os.Getenv("BRUTAL_BPS"); v != "" {
+				if parsed, err := strconv.ParseUint(v, 10, 64); err == nil && parsed > 0 {
+					brutalBPS = parsed
+				}
+			}
+			conn.SetCongestionControl(brutal.NewBrutalSender(brutalBPS))
+			log.Printf("[DEBUG] Brutal CC injected: target=%d bytes/s (%.1f Mbps)", brutalBPS, float64(brutalBPS)*8/1_000_000)
+			return conn, nil
 		},
 	}
 

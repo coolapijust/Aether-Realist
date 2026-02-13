@@ -1,0 +1,15 @@
+preset=dl-c
+since_utc=2026-02-12T07:44:42Z
+window_sec=120
+points=12
+down_avg_mbps=0.009
+down_max_mbps=0.020
+down_min_mbps=0.000
+down_nonzero_points=0
+down_avg_read_us=93772.2
+--- tail ---
+aether-gateway-core  | 2026/02/12 15:46:01 [PERF] window=10s down{mbps=0.01 rps=80 read_us=127757.8 parse_us=3.0 dec_us=1.9} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:11 [PERF] window=10s down{mbps=0.01 rps=74 read_us=134264.5 parse_us=4.2 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:21 [PERF] window=10s down{mbps=0.01 rps=83 read_us=124856.1 parse_us=3.6 dec_us=1.6} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:31 [PERF] window=10s down{mbps=0.01 rps=78 read_us=127703.6 parse_us=3.3 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:46:41 [PERF] window=10s down{mbps=0.01 rps=72 read_us=138339.4 parse_us=3.5 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}

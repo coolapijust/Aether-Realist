@@ -1,0 +1,14 @@
+aether-gateway-core  | 2026/02/12 17:55:25 [PERF] enabled=true interval=10s
+aether-gateway-core  | 2026/02/12 17:55:25 [PERF-GW] enabled=true interval=10s
+aether-gateway-core  | 2026/02/12 17:55:35 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:55:35 [PERF-GW] window=10s dl{mbps=0.00 writes=0 write_us=0.0} ul{mbps=0.00 writes=0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:55:45 [PERF] window=10s down{mbps=0.01 rps=10 read_us=87249.5 parse_us=2.4 dec_us=2.2} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:55:45 [PERF-GW] window=10s dl{mbps=0.01 writes=9 write_us=97.3} ul{mbps=0.00 writes=8 write_us=51.2}
+aether-gateway-core  | 2026/02/12 17:55:55 [PERF-GW] window=10s dl{mbps=1.71 writes=210 write_us=43997.8} ul{mbps=0.00 writes=40 write_us=82.5}
+aether-gateway-core  | 2026/02/12 17:55:55 [PERF] window=10s down{mbps=0.00 rps=42 read_us=235809.1 parse_us=2.4 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:56:05 [PERF-GW] window=10s dl{mbps=1.82 writes=156 write_us=64087.2} ul{mbps=0.01 writes=48 write_us=63.1}
+aether-gateway-core  | 2026/02/12 17:56:05 [PERF] window=10s down{mbps=0.01 rps=53 read_us=208969.3 parse_us=4.0 dec_us=3.1} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:56:15 [PERF] window=10s down{mbps=0.00 rps=46 read_us=219314.3 parse_us=10.5 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 17:56:15 [PERF-GW] window=10s dl{mbps=2.25 writes=185 write_us=56779.3} ul{mbps=0.00 writes=44 write_us=89.7}
+aether-gateway-core  | 2026/02/12 17:56:25 [PERF-GW] window=10s dl{mbps=2.53 writes=211 write_us=47412.2} ul{mbps=0.01 writes=58 write_us=97.7}
+aether-gateway-core  | 2026/02/12 17:56:25 [PERF] window=10s down{mbps=0.01 rps=62 read_us=164393.3 parse_us=3.7 dec_us=1.5} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}

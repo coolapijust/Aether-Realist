@@ -1,0 +1,24 @@
+preset=baseline
+since_utc=2026-02-12T10:27:51Z
+window_sec=60
+points_total=14
+core_down_points=7
+core_down_avg_mbps=0.000
+core_down_max_mbps=0.000
+core_down_min_mbps=0.000
+core_down_avg_read_us=546926.5
+gw_dl_points=7
+gw_dl_avg_mbps=1.231
+gw_dl_max_mbps=1.700
+gw_dl_min_mbps=0.000
+gw_dl_nonzero_points=6
+gw_dl_nonzero_avg_mbps=1.437
+gw_dl_avg_write_us=64.2
+gw_dl_max_nonzero_streak=6
+gw_dl_is_continuous6=yes
+--- tail ---
+aether-gateway-core  | 2026/02/12 18:28:31 [PERF-GW] window=10s dl{mbps=1.32 writes=104 write_us=96849.9} ul{mbps=0.00 writes=30 write_us=77.6}
+aether-gateway-core  | 2026/02/12 18:28:41 [PERF] window=10s down{mbps=0.00 rps=45 read_us=2415671.6 parse_us=7.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 18:28:41 [PERF-GW] window=10s dl{mbps=1.42 writes=114 write_us=86940.0} ul{mbps=0.00 writes=35 write_us=66.6}
+aether-gateway-core  | 2026/02/12 18:28:51 [PERF] window=10s down{mbps=0.00 rps=50 read_us=196967.4 parse_us=3.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 18:28:51 [PERF-GW] window=10s dl{mbps=1.68 writes=132 write_us=76401.1} ul{mbps=0.00 writes=37 write_us=96.7}

@@ -1,0 +1,13 @@
+aether-gateway-core  | 2026/02/12 15:36:50 [PERF] enabled=true interval=10s
+aether-gateway-core  | 2026/02/12 15:37:00 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:37:10 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:37:20 [PERF] window=10s down{mbps=0.00 rps=0 read_us=0.0 parse_us=0.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:37:30 [PERF] window=10s down{mbps=0.03 rps=106 read_us=91617.4 parse_us=4.4 dec_us=1.5} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:37:40 [PERF] window=10s down{mbps=0.01 rps=75 read_us=135886.6 parse_us=4.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:37:50 [PERF] window=10s down{mbps=0.00 rps=61 read_us=157415.6 parse_us=3.5 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:00 [PERF] window=10s down{mbps=0.01 rps=69 read_us=150400.3 parse_us=3.1 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:10 [PERF] window=10s down{mbps=0.00 rps=56 read_us=176895.8 parse_us=3.5 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:20 [PERF] window=10s down{mbps=0.01 rps=70 read_us=140555.5 parse_us=7.7 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:30 [PERF] window=10s down{mbps=0.01 rps=73 read_us=975572.8 parse_us=3.0 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:40 [PERF] window=10s down{mbps=0.00 rps=64 read_us=159625.1 parse_us=7.8 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
+aether-gateway-core  | 2026/02/12 15:38:50 [PERF] window=10s down{mbps=0.01 rps=76 read_us=132322.8 parse_us=3.2 dec_us=0.0} up{mbps=0.00 wps=0 build_us=0.0 write_us=0.0}
