@@ -112,6 +112,27 @@ require_cmd() {
     return 0
 }
 
+env_get() {
+    # Read KEY=VALUE from ENV_FILE and normalize:
+    # - keep empty if missing
+    # - trim whitespace
+    # - strip a single pair of surrounding quotes ('' or "")
+    local key="$1"
+    local file="$2"
+    local v=""
+
+    if [ ! -f "$file" ]; then
+        printf "%s" ""
+        return 0
+    fi
+
+    v="$(grep -m1 "^${key}=" "$file" 2>/dev/null | cut -d'=' -f2- || true)"
+    v="$(printf "%s" "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    # Strip one leading/trailing quote if present.
+    v="$(printf "%s" "$v" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+    printf "%s" "$v"
+}
+
 validate_record_payload_size() {
     local value="$1"
     if [[ ! "$value" =~ ^[0-9]+$ ]]; then
@@ -388,10 +409,10 @@ set_env_kv() {
 
 prompt_core_config() {
     local current_psk current_domain current_port current_payload
-    current_psk=$(grep "^PSK=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"")
-    current_domain=$(grep "^DOMAIN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"")
-    current_port=$(grep "^CADDY_PORT=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"[:space:]")
-    current_payload=$(grep "^RECORD_PAYLOAD_BYTES=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"[:space:]")
+    current_psk="$(env_get PSK "$ENV_FILE")"
+    current_domain="$(env_get DOMAIN "$ENV_FILE")"
+    current_port="$(env_get CADDY_PORT "$ENV_FILE")"
+    current_payload="$(env_get RECORD_PAYLOAD_BYTES "$ENV_FILE")"
 
     # Allow env overrides for one-liner installs.
     # Example:
@@ -461,7 +482,7 @@ EOF
             -subj "/CN=$domain" >/dev/null 2>&1
     fi
 
-    set_env_kv "LISTEN_ADDR" ":$(grep '^CADDY_PORT=' "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"[:space:]")"
+    set_env_kv "LISTEN_ADDR" ":$(env_get CADDY_PORT "$ENV_FILE")"
     set_env_kv "DECOY_ROOT" "$decoy_root"
     set_env_kv "SSL_CERT_FILE" "$cert_path"
     set_env_kv "SSL_KEY_FILE" "$key_path"
@@ -565,7 +586,7 @@ show_status() {
     echo -e "\n${YELLOW}=== Native 服务状态 ===${NC}"
     run_root systemctl --no-pager --full status "$SERVICE_NAME" | sed -n '1,18p' || true
     local port
-    port=$(grep "^CADDY_PORT=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"[:space:]")
+    port="$(env_get CADDY_PORT "$ENV_FILE")"
     [ -z "$port" ] && port=443
     echo -e "\n${YELLOW}--- 健康检查 ---${NC}"
     if curl -ksI "https://localhost:${port}/health" | grep -q "200 OK"; then
