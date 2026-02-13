@@ -151,11 +151,8 @@ ENV_FILE="${AETHER_HOME}/deploy/.env"
 # - Optional: set AETHER_RELEASE_LATEST=1 to use GitHub "latest" redirect URL.
 # - Optional: set AETHER_RELEASE_TAG=vX.Y.Z to pin an exact release.
 # - Optional: set AETHER_RELEASE_URL to force an exact binary URL (skips arch/tag).
-# - Optional: set VERIFY_SHA256=1 to verify downloaded binary (downloads sha text but does not persist it).
-VERIFY_SHA256="${VERIFY_SHA256:-0}"
 AETHER_RELEASE_LATEST="${AETHER_RELEASE_LATEST:-0}"
 AETHER_RELEASE_URL="${AETHER_RELEASE_URL:-}"
-AETHER_RELEASE_SHA256_URL="${AETHER_RELEASE_SHA256_URL:-}"
 DEFAULT_RELEASE_TAG="v5.2.2"
 
 # Optional ACME (Let's Encrypt) integration via acme.sh.
@@ -223,6 +220,273 @@ validate_record_payload_size() {
     return 0
 }
 
+check_port() {
+    # Returns 0 if port is in use, 1 if free (mirrors deploy.sh semantics).
+    local port="$1"
+    if port_in_use "$port"; then
+        return 0
+    fi
+    return 1
+}
+
+resolve_port_conflict() {
+    local port="$1"
+    if ! check_port "$port"; then
+        return 0
+    fi
+
+    say "${YELLOW}$(t "检测到端口被占用" "Port appears to be in use"): ${port}${NC}"
+    local pid=""
+    local pname=""
+
+    if command -v lsof >/dev/null 2>&1; then
+        pid="$(lsof -i :"$port" -t 2>/dev/null | head -n 1 || true)"
+    elif command -v fuser >/dev/null 2>&1; then
+        pid="$(fuser "$port"/tcp 2>/dev/null | awk '{print $NF}' || true)"
+    fi
+
+    if [ -n "$pid" ] && command -v ps >/dev/null 2>&1; then
+        pname="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
+    fi
+
+    if [ -n "$pid" ]; then
+        say "${YELLOW}$(t "占用进程" "Process"): ${pname:-unknown} (PID: ${pid})${NC}"
+        local kill_confirm="n"
+        read_tty_yn kill_confirm "$(t "是否强制结束该进程释放端口? [y/N]: " "Kill it to free the port? [y/N]: ")" "n"
+        if [ "$kill_confirm" = "y" ]; then
+            run_root kill -9 "$pid" 2>/dev/null || true
+        fi
+    else
+        say "${YELLOW}$(t "无法定位占用进程，若启动失败请手动释放端口。" "Could not identify the process; free the port manually if start fails.")${NC}"
+    fi
+}
+
+prompt_release_strategy() {
+    # Lets the user choose release/source strategy in one-liner installs.
+    local opt=""
+    say ""
+    say "${GREEN}--- $(t "安装方式" "Install Mode") ---${NC}"
+    say "1) $(t "Release 预编译二进制 (推荐)" "Release prebuilt binary (recommended)")"
+    say "2) $(t "源码编译 (需要 Go)" "Build from source (requires Go)")"
+    read_tty opt "$(t "请选择 [1-2] (默认 1): " "Select [1-2] (default 1): ")" "1"
+
+    if [ "$opt" = "2" ]; then
+        INSTALL_MODE="source"
+        return 0
+    fi
+
+    INSTALL_MODE="release"
+    local ropt=""
+    say ""
+    say "${GREEN}--- $(t "Release 来源" "Release Source") ---${NC}"
+    say "1) $(t "固定 tag (默认 v5.2.2)" "Pinned tag (default v5.2.2)")"
+    say "2) $(t "latest (自动跟随最新 Release)" "latest (follow newest release)")"
+    say "3) $(t "自定义 URL" "Custom URL")"
+    read_tty ropt "$(t "请选择 [1-3] (默认 1): " "Select [1-3] (default 1): ")" "1"
+
+    if [ "$ropt" = "2" ]; then
+        AETHER_RELEASE_LATEST="1"
+        AETHER_RELEASE_URL=""
+        return 0
+    fi
+    if [ "$ropt" = "3" ]; then
+        read_tty AETHER_RELEASE_URL "$(t "请输入二进制下载 URL: " "Enter binary download URL: ")" ""
+        AETHER_RELEASE_LATEST="0"
+        return 0
+    fi
+
+    # pinned tag
+    local tag_in=""
+    read_tty tag_in "$(t "Release tag (默认 v5.2.2): " "Release tag (default v5.2.2): ")" "$DEFAULT_RELEASE_TAG"
+    AETHER_RELEASE_TAG="${tag_in:-$DEFAULT_RELEASE_TAG}"
+    AETHER_RELEASE_LATEST="0"
+    AETHER_RELEASE_URL=""
+    return 0
+}
+
+setup_decoy_native() {
+    local template="$1"
+    local dest_dir="${AETHER_HOME}/deploy/decoy"
+
+    run_root mkdir -p "$dest_dir"
+    if [ -f "${dest_dir}/index.html" ]; then
+        local ow="n"
+        read_tty_yn ow "$(t "检测到已有伪装站点，是否覆盖? [y/N]: " "Decoy already exists, overwrite? [y/N]: ")" "n"
+        if [ "$ow" != "y" ]; then
+            return 0
+        fi
+    fi
+
+    run_root rm -rf "$dest_dir"
+    run_root mkdir -p "$dest_dir"
+
+    case "$template" in
+        sso)
+            cat > "${dest_dir}/index.html" <<'EOF'
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign In</title><style>body{font-family:system-ui,Segoe UI,Arial;background:#f5f7fb;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:28px;width:360px;box-shadow:0 10px 30px rgba(0,0,0,.08)}h1{font-size:18px;margin:0 0 8px}p{margin:0 0 18px;color:#6b7280;font-size:13px}input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;margin:8px 0;box-sizing:border-box}button{width:100%;padding:10px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-weight:600}</style></head><body><div class="card"><h1>Enterprise Access</h1><p>Sign in with your organizational account</p><input placeholder="Email"><input type="password" placeholder="Password"><button>Sign In</button></div></body></html>
+EOF
+            ;;
+        monitor)
+            cat > "${dest_dir}/index.html" <<'EOF'
+<!doctype html><html><head><meta charset="utf-8"><title>System Monitor</title><style>body{background:#0b1020;color:#d1d5db;font-family:monospace;padding:18px}h1{margin:0 0 12px}pre{background:#060914;border:1px solid #1f2937;padding:12px;border-radius:10px;overflow:auto}</style></head><body><h1>System Status: OPERATIONAL</h1><pre>node: gw-01
+cpu: nominal
+mem: nominal
+net: nominal</pre></body></html>
+EOF
+            ;;
+        nginx)
+            cat > "${dest_dir}/index.html" <<'EOF'
+<!doctype html><html><head><meta charset="utf-8"><title>403 Forbidden</title><style>body{font-family:Tahoma,Verdana,Arial,sans-serif;margin:40px auto;max-width:520px;color:#444}h1{font-weight:normal}hr{border:0;border-top:1px solid #eee}</style></head><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p><hr><address>nginx</address></body></html>
+EOF
+            ;;
+        *)
+            cat > "${dest_dir}/index.html" <<'EOF'
+<!doctype html><html><head><meta charset="utf-8"><title>Service Online</title></head><body><h1>Service Online</h1></body></html>
+EOF
+            ;;
+    esac
+}
+
+prompt_decoy_choice() {
+    say ""
+    say "${GREEN}--- $(t "伪装站点" "Decoy Site") ---${NC}"
+    say "1) $(t "企业登录门户 (推荐)" "Enterprise login portal (recommended)")"
+    say "2) $(t "运维监控面板" "Ops monitor dashboard")"
+    say "3) $(t "403 Forbidden 页面" "403 Forbidden page")"
+    say "4) $(t "自定义 Git 仓库 (需要 git)" "Custom git repo (requires git)")"
+    say "5) $(t "自定义本地目录" "Custom local directory")"
+    local opt=""
+    read_tty opt "$(t "请选择 [1-5] (默认 1): " "Select [1-5] (default 1): ")" "1"
+
+    case "$opt" in
+        2) setup_decoy_native monitor ;;
+        3) setup_decoy_native nginx ;;
+        4)
+            if ! command -v git >/dev/null 2>&1; then
+                say "${YELLOW}$(t "未检测到 git，跳过该选项，回退默认伪装。" "git not found; falling back to default decoy.")${NC}"
+                setup_decoy_native sso
+            else
+                local repo=""
+                read_tty repo "$(t "请输入 Git 仓库地址: " "Enter git repo URL: ")" ""
+                if [ -n "$repo" ]; then
+                    run_root rm -rf "${AETHER_HOME}/deploy/decoy"
+                    git clone --depth 1 "$repo" "${AETHER_HOME}/deploy/decoy"
+                else
+                    setup_decoy_native sso
+                fi
+            fi
+            ;;
+        5)
+            local p=""
+            read_tty p "$(t "请输入本地目录路径: " "Enter local directory path: ")" ""
+            if [ -n "$p" ] && [ -d "$p" ]; then
+                set_env_kv "DECOY_ROOT" "$p"
+                return 0
+            fi
+            say "${YELLOW}$(t "目录无效，回退默认伪装。" "Invalid directory; falling back to default decoy.")${NC}"
+            setup_decoy_native sso
+            ;;
+        *) setup_decoy_native sso ;;
+    esac
+
+    set_env_kv "DECOY_ROOT" "${AETHER_HOME}/deploy/decoy"
+}
+
+prompt_cert_choice() {
+    local cert_path="${AETHER_HOME}/deploy/certs/server.crt"
+    local key_path="${AETHER_HOME}/deploy/certs/server.key"
+
+    say ""
+    say "${GREEN}--- $(t "TLS 证书" "TLS Certificate") ---${NC}"
+    say "1) $(t "自动生成自签名证书 (默认)" "Generate self-signed certificate (default)")"
+    say "2) $(t "使用默认目录证书 (deploy/certs)" "Use certs under deploy/certs")"
+    say "3) $(t "指定宿主机绝对路径" "Use absolute paths on host")"
+
+    local opt=""
+    read_tty opt "$(t "请选择 [1-3] (默认 1): " "Select [1-3] (default 1): ")" "1"
+
+    case "$opt" in
+        2)
+            if [ -f "$cert_path" ] && [ -f "$key_path" ]; then
+                set_env_kv "SSL_CERT_FILE" "$cert_path"
+                set_env_kv "SSL_KEY_FILE" "$key_path"
+                return 0
+            fi
+            say "${YELLOW}$(t "未找到 deploy/certs 证书，回退自签名。" "deploy/certs not found; falling back to self-signed.")${NC}"
+            ;;
+        3)
+            local hc=""
+            local hk=""
+            read_tty hc "$(t "证书文件绝对路径 (.crt/.pem): " "Absolute cert path (.crt/.pem): ")" ""
+            read_tty hk "$(t "私钥文件绝对路径 (.key): " "Absolute key path (.key): ")" ""
+            if [ -f "$hc" ] && [ -f "$hk" ]; then
+                set_env_kv "SSL_CERT_FILE" "$hc"
+                set_env_kv "SSL_KEY_FILE" "$hk"
+                return 0
+            fi
+            say "${YELLOW}$(t "证书路径无效，回退自签名。" "Invalid paths; falling back to self-signed.")${NC}"
+            ;;
+        *) : ;;
+    esac
+
+    # self-signed fallback
+    if [ ! -f "$cert_path" ] || [ ! -f "$key_path" ]; then
+        local domain
+        domain="$(env_get DOMAIN "$ENV_FILE")"
+        [ -z "$domain" ] && domain="localhost"
+        run_root mkdir -p "${AETHER_HOME}/deploy/certs"
+        say "${YELLOW}$(t "正在生成 10 年期自签名证书..." "Generating 10-year self-signed certificate...")${NC}"
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout "$key_path" \
+            -out "$cert_path" \
+            -subj "/CN=$domain" >/dev/null 2>&1
+    fi
+    set_env_kv "SSL_CERT_FILE" "$cert_path"
+    set_env_kv "SSL_KEY_FILE" "$key_path"
+}
+
+prompt_acme_options() {
+    say ""
+    say "${GREEN}--- $(t "ACME (Let's Encrypt)" "ACME (Let's Encrypt)") ---${NC}"
+    local yn="n"
+    read_tty_yn yn "$(t "是否启用 acme.sh 自动签发/续期证书? [y/N]: " "Enable acme.sh auto cert issuance/renewal? [y/N]: ")" "n"
+    if [ "$yn" = "y" ]; then
+        ACME_ENABLE="1"
+        read_tty ACME_MODE "$(t "ACME 模式 [standalone/alpn-stop] (默认 standalone): " "ACME mode [standalone/alpn-stop] (default standalone): ")" "${ACME_MODE:-standalone}"
+        read_tty ACME_EMAIL "$(t "ACME 邮箱 (可留空): " "ACME email (optional): ")" "${ACME_EMAIL:-}"
+        read_tty ACME_CA "$(t "ACME CA (默认 letsencrypt): " "ACME CA (default letsencrypt): ")" "${ACME_CA:-letsencrypt}"
+        read_tty ACME_KEYLENGTH "$(t "密钥类型 (默认 ec-256): " "Keylength (default ec-256): ")" "${ACME_KEYLENGTH:-ec-256}"
+    else
+        ACME_ENABLE="0"
+    fi
+
+    set_env_kv "ACME_ENABLE" "$ACME_ENABLE"
+    set_env_kv "ACME_MODE" "$ACME_MODE"
+    set_env_kv "ACME_EMAIL" "'$ACME_EMAIL'"
+    set_env_kv "ACME_CA" "$ACME_CA"
+    set_env_kv "ACME_KEYLENGTH" "$ACME_KEYLENGTH"
+}
+
+maybe_optimize_udp_buffers() {
+    # Mirrors docker deploy.sh optional sysctl tuning prompt (host-side).
+    if ! command -v sysctl >/dev/null 2>&1; then
+        return 0
+    fi
+    local rmax
+    rmax="$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)"
+    if [ "${rmax:-0}" -ge 16777216 ]; then
+        return 0
+    fi
+    say "${YELLOW}$(t "检测到 UDP 接收缓冲区较小" "Detected small UDP receive buffer") (net.core.rmem_max=${rmax})${NC}"
+    local yn="n"
+    read_tty_yn yn "$(t "是否尝试自动优化内核参数? [y/N]: " "Apply sysctl UDP buffer tuning? [y/N]: ")" "n"
+    if [ "$yn" = "y" ]; then
+        run_root sysctl -w net.core.rmem_max=16777216 >/dev/null 2>&1 || true
+        run_root sysctl -w net.core.wmem_max=16777216 >/dev/null 2>&1 || true
+        say "${GREEN}$(t "已临时调整内核参数。" "Kernel params adjusted (temporary).")${NC}"
+    fi
+}
+
 port_in_use() {
     local port="$1"
     if command -v ss >/dev/null 2>&1; then
@@ -254,7 +518,7 @@ try_install_from_release() {
     #  2) AETHER_RELEASE_LATEST=1 (GitHub latest redirect)
     #  3) AETHER_RELEASE_TAG (pinned tag)
     #  4) DEFAULT_RELEASE_TAG (script default)
-    local tag arch url out sha_url
+    local tag arch url out
 
     arch="$(detect_arch)" || return 1
     tag="${AETHER_RELEASE_TAG:-}"
@@ -265,17 +529,13 @@ try_install_from_release() {
 
     if [ -n "$AETHER_RELEASE_URL" ]; then
         url="$AETHER_RELEASE_URL"
-        sha_url="${AETHER_RELEASE_SHA256_URL:-${url}.sha256}"
     elif [ "$AETHER_RELEASE_LATEST" = "1" ]; then
         url="https://github.com/coolapijust/Aether-Realist/releases/latest/download/aether-gateway-linux-${arch}"
-        sha_url="${url}.sha256"
     else
         [ -z "$tag" ] && tag="$DEFAULT_RELEASE_TAG"
         url="https://github.com/coolapijust/Aether-Realist/releases/download/${tag}/aether-gateway-linux-${arch}"
-        sha_url="${url}.sha256"
     fi
     url="$(printf %s "$url" | tr -d '\r\n')"
-    sha_url="$(printf %s "$sha_url" | tr -d '\r\n')"
 
     if [ -n "$AETHER_RELEASE_URL" ]; then
         say "${YELLOW}$(t "下载网关二进制" "Download gateway binary"): custom-url (linux-${arch})${NC}"
@@ -290,22 +550,6 @@ try_install_from_release() {
         return 1
     fi
     chmod +x "$out"
-
-    # Optional checksum verify (disabled by default to avoid extra network + file writes).
-    if [ "$VERIFY_SHA256" = "1" ]; then
-        # sha file may contain either "hash  dist/file" or "hash  file".
-        local expected actual
-        expected="$(curl -fsSL "$sha_url" 2>/dev/null | awk '{print $1}' | head -n 1 | tr -d '\r')"
-        if [ -n "$expected" ]; then
-            actual="$(sha256sum "$out" | awk '{print $1}')"
-            if [ "$expected" != "$actual" ]; then
-                echo -e "${RED}校验失败: sha256 不匹配${NC}"
-                echo -e "${YELLOW}expected=${expected}${NC}"
-                echo -e "${YELLOW}actual  =${actual}${NC}"
-                return 1
-            fi
-        fi
-    fi
 
     run_root install -m 0755 "$out" "$BIN_PATH"
     INSTALLED_FROM_RELEASE=1
@@ -383,7 +627,7 @@ setup_acme_cert() {
     fi
 
     local domain cert_path key_path
-    domain=$(grep "^DOMAIN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"")
+    domain="$(env_get DOMAIN "$ENV_FILE")"
     cert_path="${AETHER_HOME}/deploy/certs/server.crt"
     key_path="${AETHER_HOME}/deploy/certs/server.key"
 
@@ -549,12 +793,21 @@ prompt_core_config() {
 }
 
 prepare_decoy_and_cert() {
-    local decoy_root cert_path key_path
-    decoy_root="${AETHER_HOME}/deploy/decoy"
-    cert_path="${AETHER_HOME}/deploy/certs/server.crt"
-    key_path="${AETHER_HOME}/deploy/certs/server.key"
+    local decoy_root cert_path key_path default_cert default_key
+    default_cert="${AETHER_HOME}/deploy/certs/server.crt"
+    default_key="${AETHER_HOME}/deploy/certs/server.key"
 
-    if [ ! -f "${AETHER_HOME}/deploy/decoy/index.html" ]; then
+    decoy_root="$(env_get DECOY_ROOT "$ENV_FILE")"
+    [ -z "$decoy_root" ] && decoy_root="${AETHER_HOME}/deploy/decoy"
+
+    cert_path="$(env_get SSL_CERT_FILE "$ENV_FILE")"
+    key_path="$(env_get SSL_KEY_FILE "$ENV_FILE")"
+    [ -z "$cert_path" ] && cert_path="$default_cert"
+    [ -z "$key_path" ] && key_path="$default_key"
+
+    # Ensure decoy exists when using the default decoy directory.
+    if [ "$decoy_root" = "${AETHER_HOME}/deploy/decoy" ] && [ ! -f "${AETHER_HOME}/deploy/decoy/index.html" ]; then
+        run_root mkdir -p "${AETHER_HOME}/deploy/decoy"
         cat > "${AETHER_HOME}/deploy/decoy/index.html" <<'EOF'
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Aether Gateway</title></head>
@@ -562,14 +815,24 @@ prepare_decoy_and_cert() {
 EOF
     fi
 
+    # If user-specified cert paths are invalid, fall back to default location and self-signed.
     if [ ! -f "$cert_path" ] || [ ! -f "$key_path" ]; then
+        if [ "$cert_path" != "$default_cert" ] || [ "$key_path" != "$default_key" ]; then
+            say "${YELLOW}$(t "证书路径无效，回退到默认目录并生成自签名证书。" "Invalid cert paths; falling back to default dir and generating self-signed cert.")${NC}"
+            cert_path="$default_cert"
+            key_path="$default_key"
+        fi
+    fi
+
+    if [ "$cert_path" = "$default_cert" ] && { [ ! -f "$default_cert" ] || [ ! -f "$default_key" ]; }; then
         local domain
-        domain=$(grep "^DOMAIN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d "'\"")
+        domain="$(env_get DOMAIN "$ENV_FILE")"
         [ -z "$domain" ] && domain="localhost"
+        run_root mkdir -p "${AETHER_HOME}/deploy/certs"
         say "${YELLOW}$(t "未检测到证书，自动生成 10 年自签名证书..." "Certificate not found; generating a 10-year self-signed certificate...")${NC}"
         openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-            -keyout "$key_path" \
-            -out "$cert_path" \
+            -keyout "$default_key" \
+            -out "$default_cert" \
             -subj "/CN=$domain" >/dev/null 2>&1
     fi
 
@@ -584,9 +847,12 @@ build_binary() {
         return 0
     fi
 
-    if try_install_from_release; then
-        say "${GREEN}$(t "已从 Release 安装网关二进制。" "Installed gateway binary from Release.")${NC}"
-        return 0
+    # Respect explicit user choice: if INSTALL_MODE=source, never attempt Release here.
+    if [ "${INSTALL_MODE:-}" != "source" ]; then
+        if try_install_from_release; then
+            say "${GREEN}$(t "已从 Release 安装网关二进制。" "Installed gateway binary from Release.")${NC}"
+            return 0
+        fi
     fi
 
     require_cmd go || {
@@ -633,20 +899,28 @@ EOF
 }
 
 install_or_update_service() {
-    step_total=10
+    step_total=12
     step_i=0
+
+    INSTALL_MODE="${INSTALL_MODE:-}"
 
     step "$(t "检查依赖" "Check prerequisites")"
     ensure_prereqs
 
-    step "$(t "下载网关 (Release 优先; 失败则拉源码编译)" "Download gateway (prefer Release; fallback to source build)")"
-    # Only fetch source if we might need to build; we try release binary first.
+    step "$(t "选择安装方式与来源" "Choose install mode/source")"
+    prompt_release_strategy
+
+    step "$(t "获取网关二进制/源码" "Acquire gateway binary/source")"
     INSTALLED_FROM_RELEASE=0
-    if ! try_install_from_release; then
-        say "${YELLOW}$(t "Release 下载失败，回退到源码模式..." "Release download failed; falling back to source mode...")${NC}"
+    if [ "${INSTALL_MODE}" = "source" ]; then
         ensure_source
     else
-        say "${GREEN}$(t "Release 下载成功。" "Release download succeeded.")${NC}"
+        if ! try_install_from_release; then
+            say "${YELLOW}$(t "Release 下载失败，回退到源码模式..." "Release download failed; falling back to source mode...")${NC}"
+            ensure_source
+        else
+            say "${GREEN}$(t "Release 下载成功。" "Release download succeeded.")${NC}"
+        fi
     fi
 
     step "$(t "清理历史备份文件" "Clean legacy backups")"
@@ -657,11 +931,50 @@ install_or_update_service() {
 
     step "$(t "交互配置 (PSK / DOMAIN / PORT / PAYLOAD)" "Interactive config (PSK / DOMAIN / PORT / PAYLOAD)")"
     prompt_core_config
-    # Optional: obtain real cert before generating self-signed.
-    step "$(t "申请/更新证书 (可选: acme.sh)" "Issue/renew certificate (optional: acme.sh)")"
-    setup_acme_cert || true
+
+    step "$(t "端口冲突检测/处理" "Check/resolve port conflicts")"
+    local chosen_port
+    chosen_port="$(env_get CADDY_PORT "$ENV_FILE")"
+    [ -z "$chosen_port" ] && chosen_port="443"
+    resolve_port_conflict "$chosen_port"
+
+    step "$(t "伪装站点与证书选择" "Decoy/cert choices")"
+    local has_decoy="0"
+    local has_cert="0"
+    [ -f "${AETHER_HOME}/deploy/decoy/index.html" ] && has_decoy="1"
+    [ -f "${AETHER_HOME}/deploy/certs/server.crt" ] && [ -f "${AETHER_HOME}/deploy/certs/server.key" ] && has_cert="1"
+
+    local reuse="n"
+    if [ "$has_decoy" = "1" ] || [ "$has_cert" = "1" ]; then
+        read_tty_yn reuse "$(t "检测到已有伪装站/证书配置，更新时是否沿用并跳过重配? [Y/n]: " "Existing decoy/cert found. Reuse and skip reconfig? [Y/n]: ")" "y"
+    fi
+
+    if [ "$reuse" = "y" ]; then
+        set_env_kv "DECOY_ROOT" "${AETHER_HOME}/deploy/decoy"
+        if [ "$has_cert" = "1" ]; then
+            set_env_kv "SSL_CERT_FILE" "${AETHER_HOME}/deploy/certs/server.crt"
+            set_env_kv "SSL_KEY_FILE" "${AETHER_HOME}/deploy/certs/server.key"
+        fi
+    else
+        prompt_decoy_choice
+        prompt_acme_options
+        if [ "${ACME_ENABLE}" = "1" ]; then
+            setup_acme_cert || true
+        fi
+        if [ ! -f "${AETHER_HOME}/deploy/certs/server.crt" ] || [ ! -f "${AETHER_HOME}/deploy/certs/server.key" ]; then
+            prompt_cert_choice
+        else
+            set_env_kv "SSL_CERT_FILE" "${AETHER_HOME}/deploy/certs/server.crt"
+            set_env_kv "SSL_KEY_FILE" "${AETHER_HOME}/deploy/certs/server.key"
+        fi
+    fi
+
     step "$(t "准备伪装站点与证书文件" "Prepare decoy site and cert files")"
     prepare_decoy_and_cert
+
+    step "$(t "可选: 内核参数优化 (UDP 缓冲)" "Optional: kernel tuning (UDP buffers)")"
+    maybe_optimize_udp_buffers
+
     step "$(t "安装网关二进制" "Install gateway binary")"
     build_binary
     step "$(t "写入 systemd 服务" "Write systemd unit")"
@@ -697,6 +1010,83 @@ view_logs() {
     run_root journalctl -u "$SERVICE_NAME" -f --no-pager
 }
 
+check_bbr() {
+    say ""
+    say "${YELLOW}=== $(t "系统传输加速 (BBR) 检查" "BBR Check") ===${NC}"
+
+    local cc=""
+    if command -v sysctl >/dev/null 2>&1; then
+        cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)"
+    fi
+
+    if [ "$cc" = "bbr" ] || lsmod 2>/dev/null | grep -q "bbr"; then
+        say "${GREEN}[OK] $(t "BBR 已开启。" "BBR is enabled.")${NC}"
+    else
+        say "${RED}[WARN] $(t "BBR 未开启。高丢包网络强烈建议开启。" "BBR is not enabled; recommended on lossy networks.")${NC}"
+        say "$(t "参考命令:" "Reference commands:")"
+        say "  echo \"net.core.default_qdisc=fq\" >> /etc/sysctl.conf"
+        say "  echo \"net.ipv4.tcp_congestion_control=bbr\" >> /etc/sysctl.conf"
+        say "  sysctl -p"
+    fi
+}
+
+quick_config() {
+    if [ ! -f "$ENV_FILE" ]; then
+        say "${RED}$(t "错误: 配置文件不存在: " "Error: env file not found: ")${ENV_FILE}${NC}"
+        return 1
+    fi
+
+    say ""
+    say "${YELLOW}=== $(t "快捷参数修改" "Quick Config") ===${NC}"
+    say "1) PSK"
+    say "2) DOMAIN"
+    say "3) CADDY_PORT"
+    say "4) RECORD_PAYLOAD_BYTES"
+    read_tty opt "$(t "请输入 [1-4]: " "Select [1-4]: ")" ""
+
+    case "$opt" in
+        1)
+            read_tty v "$(t "新 PSK: " "New PSK: ")" ""
+            [ -n "$v" ] && set_env_kv "PSK" "'$v'"
+            ;;
+        2)
+            read_tty v "$(t "新 DOMAIN: " "New DOMAIN: ")" ""
+            [ -n "$v" ] && set_env_kv "DOMAIN" "'$v'"
+            ;;
+        3)
+            read_tty v "$(t "新端口 (如 443 或 8443): " "New port (e.g. 443 or 8443): ")" ""
+            if [ -n "$v" ]; then
+                set_env_kv "CADDY_PORT" "$v"
+                set_env_kv "LISTEN_ADDR" ":$v"
+            fi
+            ;;
+        4)
+            local cur
+            cur="$(env_get RECORD_PAYLOAD_BYTES "$ENV_FILE")"
+            validate_record_payload_size "$cur" || cur="16384"
+            read_tty v "$(t "新 RECORD_PAYLOAD_BYTES (当前 " "New RECORD_PAYLOAD_BYTES (current ")${cur}): " "$cur"
+            v="${v:-$cur}"
+            if validate_record_payload_size "$v"; then
+                set_env_kv "RECORD_PAYLOAD_BYTES" "$v"
+            else
+                say "${RED}$(t "无效值，已取消修改。" "Invalid value; aborted.")${NC}"
+                return 1
+            fi
+            ;;
+        *)
+            say "${RED}$(t "无效选项" "Invalid option")${NC}"
+            return 1
+            ;;
+    esac
+
+    say "${GREEN}$(t "配置已更新。" "Config updated.")${NC}"
+    local yn="n"
+    read_tty_yn yn "$(t "是否重启服务以应用配置? [y/N]: " "Restart service to apply? [y/N]: ")" "n"
+    if [ "$yn" = "y" ]; then
+        run_root systemctl restart "$SERVICE_NAME"
+    fi
+}
+
 stop_service() {
     run_root systemctl stop "$SERVICE_NAME"
     say "${GREEN}$(t "服务已停止。" "Service stopped.")${NC}"
@@ -719,14 +1109,18 @@ show_menu() {
     say "3. $(t "删除服务" "Remove service")"
     say "4. $(t "查看状态" "Show status")"
     say "5. $(t "查看日志" "View logs")"
+    say "6. $(t "检查系统优化 (BBR)" "Check BBR")"
+    say "7. $(t "快捷修改关键配置" "Quick config")"
     say "0. $(t "退出" "Exit")"
-    read_tty option "请输入选项 [0-5]: " ""
+    read_tty option "请输入选项 [0-7]: " ""
     case "$option" in
         1) install_or_update_service ;;
         2) stop_service ;;
         3) remove_service ;;
         4) show_status ;;
         5) view_logs ;;
+        6) check_bbr ;;
+        7) quick_config ;;
         0) exit 0 ;;
         *) say "${RED}$(t "无效选项" "Invalid option")${NC}" ;;
     esac
