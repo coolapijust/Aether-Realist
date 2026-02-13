@@ -217,7 +217,10 @@ type ConnectionState struct {
 	// When true, datagrams can be sent using the Conn's SendDatagram method.
 	// This is a unilateral declaration by the peer - receiving datagrams is only possible if
 	// datagram support was enabled locally via Config.EnableDatagrams.
-	SupportsDatagrams bool
+	SupportsDatagrams struct {
+		Local  bool
+		Remote bool
+	}
 	// SupportsStreamResetPartialDelivery indicates whether the peer advertised support for QUIC Stream Resets with Partial Delivery.
 	SupportsStreamResetPartialDelivery bool
 	// Used0RTT says if 0-RTT resumption was used.

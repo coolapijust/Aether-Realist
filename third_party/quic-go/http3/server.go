@@ -798,6 +798,31 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.connCount.Load() == 0 {
 		return s.Close()
 	}
+	return nil
+}
+
+// NewRawServerConn creates a new HTTP/3 server connection.
+func (s *Server) NewRawServerConn(conn *quic.Conn) *Conn {
+	connCtx := conn.Context()
+	connCtx = context.WithValue(connCtx, ServerContextKey, s)
+	connCtx = context.WithValue(connCtx, http.LocalAddrContextKey, conn.LocalAddr())
+	connCtx = context.WithValue(connCtx, RemoteAddrContextKey, conn.RemoteAddr())
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, conn)
+		if connCtx == nil {
+			panic("http3: ConnContext returned nil")
+		}
+	}
+
+	return newConnection(
+		connCtx,
+		conn,
+		s.EnableDatagrams,
+		true, // server
+		s.Logger,
+		s.IdleTimeout,
+	)
+}
 	select {
 	case <-s.connHandlingDone: // all connections were closed
 		// When receiving a GOAWAY frame, HTTP/3 clients are expected to close the connection

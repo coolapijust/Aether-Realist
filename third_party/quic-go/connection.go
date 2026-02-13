@@ -789,6 +789,8 @@ func (c *Conn) ConnectionState() ConnectionState {
 	c.connState.TLS = cs.ConnectionState
 	c.connState.Used0RTT = cs.Used0RTT
 	c.connState.SupportsStreamResetPartialDelivery = c.peerParams.EnableResetStreamAt
+	c.connState.SupportsDatagrams.Local = c.config.EnableDatagrams
+	c.connState.SupportsDatagrams.Remote = c.peerParams.MaxDatagramFrameSize > 0
 	c.connState.GSO = c.conn.capabilities().GSO
 	return c.connState
 }

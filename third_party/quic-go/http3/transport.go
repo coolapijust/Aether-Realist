@@ -438,6 +438,10 @@ func (t *Transport) NewClientConn(conn *quic.Conn) *ClientConn {
 	)
 }
 
+func (t *Transport) NewRawClientConn(conn *quic.Conn) *ClientConn {
+	return t.NewClientConn(conn)
+}
+
 // Close closes the QUIC connections that this Transport has used.
 // A Transport cannot be used after it has been closed.
 func (t *Transport) Close() error {
