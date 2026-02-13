@@ -52,6 +52,9 @@ jobs:
           export GOOS=${{ matrix.goos }}
           export GOARCH=${{ matrix.goarch }}
           OUT="dist/aether-gateway-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}"
+          # 自动修复缺失的 go.sum 条目
+          go mod tidy
+          go mod download
           go build -trimpath -ldflags="-s -w" -o "${OUT}" ./cmd/aether-gateway
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -87,6 +90,10 @@ jobs:
           export GOOS=${{ matrix.goos }}
           export GOARCH=${{ matrix.goarch }}
           
+          # 自动修复缺失的 go.sum 条目
+          go mod tidy
+          go mod download
+
           # Build aether-client (CLI)
           go build -trimpath -ldflags="-s -w" -o "dist/aether-client-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}" ./cmd/aether-client
           
