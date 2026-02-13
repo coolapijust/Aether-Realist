@@ -2356,7 +2356,8 @@ func (c *Conn) restoreTransportParameters(params *wire.TransportParameters) {
 	c.connFlowController.UpdateSendWindow(params.InitialMaxData)
 	c.streamsMap.HandleTransportParameters(params)
 	c.connStateMutex.Lock()
-	c.connState.SupportsDatagrams = c.supportsDatagrams()
+	c.connState.SupportsDatagrams.Local = c.config.EnableDatagrams
+	c.connState.SupportsDatagrams.Remote = c.supportsDatagrams()
 	c.connStateMutex.Unlock()
 }
 
@@ -2389,7 +2390,8 @@ func (c *Conn) handleTransportParameters(params *wire.TransportParameters) error
 	}
 
 	c.connStateMutex.Lock()
-	c.connState.SupportsDatagrams = c.supportsDatagrams()
+	c.connState.SupportsDatagrams.Local = c.config.EnableDatagrams
+	c.connState.SupportsDatagrams.Remote = c.supportsDatagrams()
 	c.connStateMutex.Unlock()
 	return nil
 }
