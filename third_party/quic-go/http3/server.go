@@ -815,7 +815,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 // NewRawServerConn creates a new HTTP/3 server connection.
-func (s *Server) NewRawServerConn(conn *quic.Conn) *Conn {
+func (s *Server) NewRawServerConn(conn *quic.Conn) (*Conn, error) {
 	connCtx := conn.Context()
 	connCtx = context.WithValue(connCtx, ServerContextKey, s)
 	connCtx = context.WithValue(connCtx, http.LocalAddrContextKey, conn.LocalAddr())
@@ -834,7 +834,7 @@ func (s *Server) NewRawServerConn(conn *quic.Conn) *Conn {
 		true, // server
 		s.Logger,
 		s.IdleTimeout,
-	)
+	), nil
 }
 
 // ErrNoAltSvcPort is the error returned by SetQUICHeaders when no port was found

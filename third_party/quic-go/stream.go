@@ -117,6 +117,10 @@ func (s *Stream) Read(p []byte) (int, error) {
 	return s.receiveStr.Read(p)
 }
 
+func (s *Stream) ReadByte() (byte, error) {
+	return s.receiveStr.ReadByte()
+}
+
 // Write writes data to the stream.
 // Write can be made to time out using [Stream.SetWriteDeadline] or [Stream.SetDeadline].
 // If the stream was canceled, the error is a [StreamError].
@@ -128,6 +132,10 @@ func (s *Stream) Write(p []byte) (int, error) {
 // See [SendStream.CancelWrite] for more details.
 func (s *Stream) CancelWrite(errorCode StreamErrorCode) {
 	s.sendStr.CancelWrite(errorCode)
+}
+
+func (s *Stream) SetReliableBoundary(b protocol.ByteCount) {
+	s.sendStr.SetReliableBoundary(b)
 }
 
 // CancelRead aborts receiving on this stream.

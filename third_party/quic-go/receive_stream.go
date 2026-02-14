@@ -105,6 +105,34 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
+func (s *ReceiveStream) ReadByte() (byte, error) {
+	s.readOnce <- struct{}{}
+	defer func() { <-s.readOnce }()
+
+	s.mutex.Lock()
+	var p [1]byte
+	queuedStreamWindowUpdate, queuedConnWindowUpdate, n, err := s.readImpl(p[:])
+	completed := s.isNewlyCompleted()
+	s.mutex.Unlock()
+
+	if completed {
+		s.sender.onStreamCompleted(s.streamID)
+	}
+	if queuedStreamWindowUpdate {
+		s.sender.onHasStreamControlFrame(s.streamID, s)
+	}
+	if queuedConnWindowUpdate {
+		s.sender.onHasConnectionData()
+	}
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	return p[0], nil
+}
+
 func (s *ReceiveStream) isNewlyCompleted() bool {
 	if s.completed {
 		return false

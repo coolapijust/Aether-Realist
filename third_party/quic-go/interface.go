@@ -222,7 +222,10 @@ type ConnectionState struct {
 		Remote bool
 	}
 	// SupportsStreamResetPartialDelivery indicates whether the peer advertised support for QUIC Stream Resets with Partial Delivery.
-	SupportsStreamResetPartialDelivery bool
+	SupportsStreamResetPartialDelivery struct {
+		Local  bool
+		Remote bool
+	}
 	// Used0RTT says if 0-RTT resumption was used.
 	Used0RTT bool
 	// Version is the QUIC version of the QUIC connection.

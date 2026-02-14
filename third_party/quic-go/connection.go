@@ -788,7 +788,8 @@ func (c *Conn) ConnectionState() ConnectionState {
 	cs := c.cryptoStreamHandler.ConnectionState()
 	c.connState.TLS = cs.ConnectionState
 	c.connState.Used0RTT = cs.Used0RTT
-	c.connState.SupportsStreamResetPartialDelivery = c.peerParams.EnableResetStreamAt
+	c.connState.SupportsStreamResetPartialDelivery.Local = c.config.EnableStreamResetPartialDelivery
+	c.connState.SupportsStreamResetPartialDelivery.Remote = c.peerParams.EnableResetStreamAt
 	c.connState.SupportsDatagrams.Local = c.config.EnableDatagrams
 	c.connState.SupportsDatagrams.Remote = c.peerParams.MaxDatagramFrameSize > 0
 	c.connState.GSO = c.conn.capabilities().GSO

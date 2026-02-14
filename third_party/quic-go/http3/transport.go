@@ -438,8 +438,8 @@ func (t *Transport) NewClientConn(conn *quic.Conn) *ClientConn {
 	)
 }
 
-func (t *Transport) NewRawClientConn(conn *quic.Conn) *ClientConn {
-	return t.NewClientConn(conn)
+func (t *Transport) NewRawClientConn(conn *quic.Conn) (*ClientConn, error) {
+	return t.NewClientConn(conn), nil
 }
 
 // Close closes the QUIC connections that this Transport has used.

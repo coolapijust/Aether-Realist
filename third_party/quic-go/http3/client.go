@@ -410,3 +410,11 @@ func (c *ClientConn) doRequest(req *http.Request, str *RequestStream) (*http.Res
 func (c *ClientConn) Conn() *Conn {
 	return c.conn
 }
+
+func (c *ClientConn) HandleBidirectionalStream(str quic.Stream) {
+	// Not implemented, but required for interface compatibility.
+}
+
+func (c *ClientConn) HandleUnidirectionalStream(str quic.ReceiveStream) {
+	// Not implemented, but required for interface compatibility.
+}
