@@ -152,7 +152,7 @@ say "${GREEN}==============================================${NC}"
 say "${GREEN}$(t "   Aether-Realist Native 一键部署工具         " "   Aether-Realist Native One-Click Deploy     ")${NC}"
 say "${GREEN}==============================================${NC}"
 
-DEPLOY_REF="${DEPLOY_REF:-main}"
+DEPLOY_REF="${DEPLOY_REF:-test/brutal-cc}"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/${DEPLOY_REF}"
 GITHUB_REPO="https://github.com/coolapijust/Aether-Realist.git"
 GITHUB_API_REPO="https://api.github.com/repos/coolapijust/Aether-Realist"

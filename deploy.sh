@@ -11,18 +11,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}==============================================${NC}"
-echo -e "${GREEN}    Aether-Realist V5.1 一键部署工具          ${NC}"
-echo -e "${GREEN}==============================================${NC}"
-
-# Allow overriding branch/ref for test deployments.
-# Example: DEPLOY_REF=exp/dl-continuity-test ./deploy.sh
-DEPLOY_REF="${DEPLOY_REF:-main}"
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/coolapijust/Aether-Realist/${DEPLOY_REF}"
-# Docker tags cannot contain '/', so branch refs are normalized for image tag use.
-DEFAULT_AETHER_IMAGE_TAG="$(echo "$DEPLOY_REF" | sed 's#[/:@]#-#g' | sed 's/[^A-Za-z0-9_.-]/-/g')"
-
-download_file() {
     local FILE_PATH=$1
     local FORCE_UPDATE=$2
     local URL="$GITHUB_RAW_BASE/$FILE_PATH"
