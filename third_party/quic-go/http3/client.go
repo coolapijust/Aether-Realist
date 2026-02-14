@@ -411,10 +411,10 @@ func (c *ClientConn) Conn() *Conn {
 	return c.conn
 }
 
-func (c *ClientConn) HandleBidirectionalStream(str quic.Stream) {
+func (c *ClientConn) HandleBidirectionalStream(str *quic.Stream) {
 	// Not implemented, but required for interface compatibility.
 }
 
-func (c *ClientConn) HandleUnidirectionalStream(str quic.ReceiveStream) {
+func (c *ClientConn) HandleUnidirectionalStream(str *quic.ReceiveStream) {
 	// Not implemented, but required for interface compatibility.
 }

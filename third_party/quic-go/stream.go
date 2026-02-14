@@ -134,8 +134,8 @@ func (s *Stream) CancelWrite(errorCode StreamErrorCode) {
 	s.sendStr.CancelWrite(errorCode)
 }
 
-func (s *Stream) SetReliableBoundary(b protocol.ByteCount) {
-	s.sendStr.SetReliableBoundary(b)
+func (s *Stream) SetReliableBoundary() {
+	s.sendStr.SetReliableBoundary()
 }
 
 // CancelRead aborts receiving on this stream.

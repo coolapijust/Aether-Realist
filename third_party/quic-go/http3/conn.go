@@ -470,3 +470,17 @@ func (c *Conn) Settings() *Settings { return c.settings }
 
 // Context returns the context of the underlying QUIC connection.
 func (c *Conn) Context() context.Context { return c.ctx }
+
+func (c *Conn) HandleRequestStream(str *quic.Stream) {
+	// Not implemented, but required for interface compatibility.
+}
+
+func (c *Conn) HandleUnidirectionalStream(str *quic.ReceiveStream) {
+	// Not implemented, but required for interface compatibility.
+}
+
+// Settingser matches the interface required by webtransport-go
+type Settingser interface {
+	Settings() *Settings
+	ReceivedSettings() <-chan struct{}
+}

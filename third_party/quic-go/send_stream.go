@@ -440,15 +440,14 @@ func (s *SendStream) Close() error {
 	return nil
 }
 
-// SetReliableBoundary marks the data written to this stream so far as reliable.
-// It is valid to call this function multiple times, thereby increasing the reliable size.
-// It only has an effect if the peer enabled support for the RESET_STREAM_AT extension,
-// otherwise, it is a no-op.
-func (s *SendStream) SetReliableBoundary(b protocol.ByteCount) {
+func (s *SendStream) SetReliableBoundary() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	s.reliableSize = b
+	s.reliableSize = s.writeOffset
+	if s.nextFrame != nil {
+		s.reliableSize += s.nextFrame.DataLen()
+	}
 }
 
 // returnFramesToPool returns all queued frames to the sync.Pool

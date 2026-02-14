@@ -180,10 +180,7 @@ func Len(i uint64) int {
 }
 
 // Peek returns the value of the next varint without consuming it.
-// It returns the value and the number of bytes that encoding it takes.
-func Peek(r io.ByteReader) (uint64, int) {
+func Peek(r io.ByteReader) (uint64, error) {
 	// Not truly possible with just ByteReader without consuming.
-	// However, webtransport-go seems to expect something.
-	// We'll return 0,0 for now as a stub.
-	return 0, 0
+	return 0, fmt.Errorf("Peek not implemented in this fork")
 }
